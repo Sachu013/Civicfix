@@ -1,49 +1,36 @@
-# Smart Public Grievance Management Platform
+# Smart City Complaint Management System
 
-A modern full-stack application for efficient civic issue resolution.
+A web-based grievance management platform that enables citizens to report civic issues, upload supporting images, and track the status of their complaints.
+
+## Overview
+
+The Smart City Complaint Management System streamlines the process of reporting and managing public grievances. Citizens can submit complaints with images, while administrators can review, track, and respond to issues through a centralized dashboard.
 
 ## Features
-- **Citizen Portal**: Report issues with AI categorization and track resolution progress.
-- **Admin Dashboard**: Analytics, metrics, and complaint management for municipal authorities.
-- **AI Module**: Automated categorization and department assignment.
+
+- Submit complaints with image uploads
+- Track complaint status
+- Administrator dashboard for complaint management
+- Status updates and responses
+- User-friendly interface
 
 ## Tech Stack
-- **Frontend**: React.js, Tailwind CSS, Axios, Lucide-React, Chart.js.
-- **Backend**: Node.js, Express.js, MongoDB, Mongoose.
-- **Auth**: JWT, Bcrypt.js.
 
-## Getting Started
+- MongoDB
+- Express.js
+- React
+- Node.js
 
-### Prerequisites
-- Node.js installed.
-- MongoDB instance (local or Atlas).
+## Live Demo
 
-### Installation
+https://smartcity-inky.vercel.app/login
 
-#### 1. Backend Setup
-```bash
-cd server
-npm install
-```
-Create a `.env` file in the `server` directory:
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/smartcity
-JWT_SECRET=your_jwt_secret
-NODE_ENV=development
-```
-Run the server:
-```bash
-npm start
-```
+## GitHub Repository
 
-#### 2. Frontend Setup
-```bash
-cd client
-npm install
-npm run dev
-```
+https://github.com/Sachu013/smartcity
 
-## Deployment
-- **Frontend**: Vercel / Netlify.
-- **Backend**: Render / Railway.
+## Author
+
+**Sachu**
+
+GitHub: https://github.com/Sachu013
