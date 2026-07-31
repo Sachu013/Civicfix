@@ -21,6 +21,11 @@ The Smart City Complaint Management System streamlines the process of reporting 
 - React
 - Node.js
 
+## User Roles
+
+- Citizen: Submit and track complaints
+- Administrator: Review, manage, and respond to complaints
+  
 ## Live Demo
 
 https://smartcity-inky.vercel.app/login
