@@ -4,7 +4,22 @@ const asyncHandler = require('../utils/asyncHandler');
 // @desc    Submit a complaint
 // @route   POST /api/complaints
 const submitComplaint = asyncHandler(async (req, res) => {
-    const { title, description, location, imageUrl } = req.body;
+    const {
+        title,
+        description,
+        location,
+        imageUrl,
+        latitude,
+        longitude,
+        formattedAddress,
+        landmark,
+        locality,
+        city,
+        district,
+        state,
+        pincode,
+        country
+    } = req.body;
 
     const complaint = await complaintService.createComplaint({
         userId: req.user._id,
@@ -12,6 +27,16 @@ const submitComplaint = asyncHandler(async (req, res) => {
         description,
         location,
         imageUrl,
+        latitude,
+        longitude,
+        formattedAddress,
+        landmark,
+        locality,
+        city,
+        district,
+        state,
+        pincode,
+        country
     });
 
     res.status(201).json(complaint);

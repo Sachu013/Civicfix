@@ -49,28 +49,32 @@ const seedData = async () => {
         }
         console.log('Created 13 users...');
 
-        // Sample Complaints Data
+        // Base coordinates around SmartCity central area (28.6139° N, 77.2090° E)
+        const baseLat = 28.6139;
+        const baseLng = 77.2090;
+
+        // Sample Complaints Data with geospatial details
         const complaintSamples = [
-            { title: 'Major Pothole on Main Road', category: 'Road Damage', location: 'Sector 4, MG Road', urgency: 'High' },
-            { title: 'Garbage Overflow near Park', category: 'Garbage', location: 'Green View Colony', urgency: 'Medium' },
-            { title: 'Water Leakage from High-Press Pipe', category: 'Water Leakage', location: 'Industrial Area Phase 2', urgency: 'High' },
-            { title: 'Street Lights Not Functional', category: 'Street Light', location: 'Lane 7, Sector 12', urgency: 'Low' },
-            { title: 'Power Transformer Sparking', category: 'Electricity', location: 'Near Community Center', urgency: 'Urgent' },
-            { title: 'Uncollected Waste in Market Line', category: 'Garbage', location: 'Central Market', urgency: 'Medium' },
-            { title: 'Broken Footpath Tiles', category: 'Road Damage', location: 'Mall Road', urgency: 'Low' },
-            { title: 'Low Water Pressure in Morning', category: 'Water Leakage', location: 'Sunrise Apartments', urgency: 'Medium' },
-            { title: 'Frequent Power Surges', category: 'Electricity', location: 'Block B, Sector 5', urgency: 'High' },
-            { title: 'Abandoned Vehicle Blocking Way', category: 'Other', location: 'East Side bypass', urgency: 'Low' },
-            { title: 'Open Manhole Hazard', category: 'Road Damage', location: 'Primary School Gate', urgency: 'Urgent' },
-            { title: 'Illegal Dumping Site', category: 'Garbage', location: 'Behind Metro Station', urgency: 'High' },
-            { title: 'Damaged Bus Shelter', category: 'Other', location: 'City Center Stop', urgency: 'Low' },
-            { title: 'Stagnant Water Drainage Block', category: 'Water Leakage', location: 'Sector 9 slum area', urgency: 'High' },
-            { title: 'Flickering Street Lamps', category: 'Street Light', location: 'Heritage Walkway', urgency: 'Low' },
-            { title: 'Exposed Electrical Wires', category: 'Electricity', location: 'Park Street intersection', urgency: 'Urgent' },
-            { title: 'Cracked Surface on Bridge', category: 'Road Damage', location: 'Old City Bridge', urgency: 'High' },
-            { title: 'Foul Smell from Sewage', category: 'Garbage', location: 'Near Fish Market', urgency: 'Medium' },
-            { title: 'Hydrant Leakage', category: 'Water Leakage', location: 'Fire Station Road', urgency: 'Medium' },
-            { title: 'New Area Street Light Request', category: 'Street Light', location: 'Ext-3 Colony', urgency: 'Low' },
+            { title: 'Major Pothole on Main Road', category: 'Road Damage', location: 'Sector 4, MG Road', locality: 'Sector 4', city: 'SmartCity', pincode: '110001', urgency: 'High', latOffset: 0.005, lngOffset: 0.003 },
+            { title: 'Garbage Overflow near Park', category: 'Garbage', location: 'Green View Colony', locality: 'Green View', city: 'SmartCity', pincode: '110002', urgency: 'Medium', latOffset: -0.004, lngOffset: 0.008 },
+            { title: 'Water Leakage from High-Press Pipe', category: 'Water Leakage', location: 'Industrial Area Phase 2', locality: 'Industrial Area', city: 'SmartCity', pincode: '110020', urgency: 'High', latOffset: 0.012, lngOffset: -0.005 },
+            { title: 'Street Lights Not Functional', category: 'Street Light', location: 'Lane 7, Sector 12', locality: 'Sector 12', city: 'SmartCity', pincode: '110012', urgency: 'Low', latOffset: -0.008, lngOffset: -0.010 },
+            { title: 'Power Transformer Sparking', category: 'Electricity', location: 'Near Community Center', locality: 'Central Zone', city: 'SmartCity', pincode: '110001', urgency: 'Urgent', latOffset: 0.002, lngOffset: 0.001 },
+            { title: 'Uncollected Waste in Market Line', category: 'Garbage', location: 'Central Market', locality: 'Market Zone', city: 'SmartCity', pincode: '110005', urgency: 'Medium', latOffset: -0.002, lngOffset: 0.004 },
+            { title: 'Broken Footpath Tiles', category: 'Road Damage', location: 'Mall Road', locality: 'Civil Lines', city: 'SmartCity', pincode: '110007', urgency: 'Low', latOffset: 0.009, lngOffset: 0.007 },
+            { title: 'Low Water Pressure in Morning', category: 'Water Leakage', location: 'Sunrise Apartments', locality: 'Sunrise Enclave', city: 'SmartCity', pincode: '110015', urgency: 'Medium', latOffset: -0.015, lngOffset: 0.002 },
+            { title: 'Frequent Power Surges', category: 'Electricity', location: 'Block B, Sector 5', locality: 'Sector 5', city: 'SmartCity', pincode: '110005', urgency: 'High', latOffset: 0.007, lngOffset: -0.008 },
+            { title: 'Abandoned Vehicle Blocking Way', category: 'Other', location: 'East Side bypass', locality: 'East Bypass', city: 'SmartCity', pincode: '110091', urgency: 'Low', latOffset: -0.011, lngOffset: 0.014 },
+            { title: 'Open Manhole Hazard', category: 'Road Damage', location: 'Primary School Gate', locality: 'School Zone', city: 'SmartCity', pincode: '110003', urgency: 'Urgent', latOffset: 0.003, lngOffset: -0.002 },
+            { title: 'Illegal Dumping Site', category: 'Garbage', location: 'Behind Metro Station', locality: 'Metro Hub', city: 'SmartCity', pincode: '110018', urgency: 'High', latOffset: -0.006, lngOffset: 0.009 },
+            { title: 'Damaged Bus Shelter', category: 'Other', location: 'City Center Stop', locality: 'City Center', city: 'SmartCity', pincode: '110001', urgency: 'Low', latOffset: 0.001, lngOffset: -0.004 },
+            { title: 'Stagnant Water Drainage Block', category: 'Water Leakage', location: 'Sector 9 slum area', locality: 'Sector 9', city: 'SmartCity', pincode: '110009', urgency: 'High', latOffset: 0.014, lngOffset: -0.012 },
+            { title: 'Flickering Street Lamps', category: 'Street Light', location: 'Heritage Walkway', locality: 'Old Town', city: 'SmartCity', pincode: '110006', urgency: 'Low', latOffset: -0.010, lngOffset: -0.003 },
+            { title: 'Exposed Electrical Wires', category: 'Electricity', location: 'Park Street intersection', locality: 'Park Street', city: 'SmartCity', pincode: '110016', urgency: 'Urgent', latOffset: 0.004, lngOffset: 0.006 },
+            { title: 'Cracked Surface on Bridge', category: 'Road Damage', location: 'Old City Bridge', locality: 'Bridge End', city: 'SmartCity', pincode: '110006', urgency: 'High', latOffset: -0.007, lngOffset: -0.006 },
+            { title: 'Foul Smell from Sewage', category: 'Garbage', location: 'Near Fish Market', locality: 'South Market', city: 'SmartCity', pincode: '110022', urgency: 'Medium', latOffset: 0.008, lngOffset: 0.011 },
+            { title: 'Hydrant Leakage', category: 'Water Leakage', location: 'Fire Station Road', locality: 'Station Circle', city: 'SmartCity', pincode: '110025', urgency: 'Medium', latOffset: -0.003, lngOffset: -0.007 },
+            { title: 'New Area Street Light Request', category: 'Street Light', location: 'Ext-3 Colony', locality: 'Extension 3', city: 'SmartCity', pincode: '110034', urgency: 'Low', latOffset: 0.016, lngOffset: 0.005 },
         ];
 
         const statuses = ['Pending', 'In Progress', 'Resolved'];
@@ -83,6 +87,9 @@ const seedData = async () => {
 
         for (let i = 0; i < 20; i++) {
             const sample = complaintSamples[i];
+            const lat = Number((baseLat + sample.latOffset).toFixed(6));
+            const lng = Number((baseLng + sample.lngOffset).toFixed(6));
+
             await Complaint.create({
                 complaintId: `CMP-${Date.now()}-${i}`,
                 user: citizens[i % 10]._id,
@@ -91,13 +98,25 @@ const seedData = async () => {
                 category: sample.category,
                 imageUrl: images[i % 4],
                 location: sample.location,
+                formattedAddress: `${sample.location}, ${sample.locality}, ${sample.city} ${sample.pincode}`,
+                locality: sample.locality,
+                city: sample.city,
+                pincode: sample.pincode,
+                state: 'Delhi NCR',
+                country: 'India',
+                latitude: lat,
+                longitude: lng,
+                locationPoint: {
+                    type: 'Point',
+                    coordinates: [lng, lat] // [longitude, latitude]
+                },
                 status: statuses[i % 3], // Cycle through statuses
                 urgency: sample.urgency,
                 adminResponse: i % 3 === 2 ? 'Incident addressed. Resolution deployed and verified by field units.' : '',
                 assignedDepartment: `${sample.category} Unit`
             });
         }
-        console.log('Seeded 20 complaints...');
+        console.log('Seeded 20 complaints with geospatial data and 2dsphere index compatibility...');
 
         // Seed Alerts
         await Alert.create([

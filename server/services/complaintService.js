@@ -1,5 +1,6 @@
 const Complaint = require('../models/Complaint');
 const ErrorResponse = require('../utils/errorResponse');
+const geoService = require('./geoService');
 
 // Keywords for auto-categorization and urgency
 const categories = {
@@ -40,29 +41,66 @@ const analyzeComplaint = (text) => {
     return { category, urgency, assignedDepartment: departments[category] };
 };
 
-const createComplaint = async ({ userId, title, description, location, imageUrl }) => {
+const createComplaint = async ({
+    userId,
+    title,
+    description,
+    location,
+    imageUrl,
+    latitude,
+    longitude,
+    formattedAddress,
+    landmark,
+    locality,
+    city,
+    district,
+    state,
+    pincode,
+    country,
+}) => {
     const analysis = analyzeComplaint(title + ' ' + description);
+
+    // Normalize location input using geoService
+    const rawLocationInput = typeof location === 'object' && location !== null
+        ? location
+        : {
+            location: typeof location === 'string' ? location : undefined,
+            latitude,
+            longitude,
+            formattedAddress,
+            landmark,
+            locality,
+            city,
+            district,
+            state,
+            pincode,
+            country,
+        };
+
+    const formattedGeo = geoService.formatLocationData(rawLocationInput);
 
     // Simple ID generator
     const complaintId = 'CMP' + Date.now().toString().slice(-8);
 
-    const complaint = await Complaint.create({
+    const complaintData = {
         complaintId,
         user: userId,
         title,
         description,
-        location,
         imageUrl,
         category: analysis.category,
         urgency: analysis.urgency,
         assignedDepartment: analysis.assignedDepartment,
-    });
+        ...formattedGeo,
+    };
+
+    const complaint = await Complaint.create(complaintData);
 
     return complaint;
 };
 
 const getUserComplaints = async (userId) => {
-    return await Complaint.find({ user: userId });
+    return await Complaint.find({ user: userId }).sort({ createdAt: -1 });
 };
 
 const trackComplaint = async (complaintId) => {
