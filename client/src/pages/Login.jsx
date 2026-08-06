@@ -38,12 +38,13 @@ const Login = () => {
         setLoading(true);
 
         try {
+            let user;
             if (isRegister) {
-                await register(formData.name, formData.email, formData.password, formData.role);
+                user = await register(formData.name, formData.email, formData.password, formData.role);
             } else {
-                await login(formData.email, formData.password);
+                user = await login(formData.email, formData.password);
             }
-            navigate(formData.role === 'admin' ? '/admin-dashboard' : '/citizen-dashboard');
+            navigate(user.role === 'admin' ? '/admin-dashboard' : '/citizen-dashboard');
         } catch (err) {
             setError(err.response?.data?.message || 'Authentication sequence failed. Check credentials.');
         } finally {
@@ -123,7 +124,7 @@ const Login = () => {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setFormData({ ...formData, email: 'citizen@test.com', password: '123456', role: 'citizen' });
+                                    setFormData({ ...formData, email: 'citizen@demo.com', password: 'citizen123', role: 'citizen' });
                                     setIsRegister(false);
                                 }}
                                 className="flex flex-col items-center gap-2 p-4 bg-primary-50 border border-primary-100 rounded-2xl hover:bg-primary-100 transition-all group"

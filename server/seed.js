@@ -21,7 +21,6 @@ const seedData = async () => {
         console.log('Purged existing data...');
 
         // Create Admins
-        const adminPassword = await bcrypt.hash('123456', 10);
         const admins = await User.create([
             { name: 'Hackathon Admin', email: 'admin@test.com', password: '123456', role: 'admin' },
             { name: 'Sanju Admin', email: 'admin@smartcity.gov', password: 'admin123', role: 'admin' },
@@ -33,8 +32,8 @@ const seedData = async () => {
         // Specific Test Citizen
         const testCitizen = await User.create({
             name: 'Demo Citizen',
-            email: 'citizen@test.com',
-            password: '123456',
+            email: 'citizen@demo.com',
+            password: 'citizen123',
             role: 'citizen'
         });
         citizens.push(testCitizen);

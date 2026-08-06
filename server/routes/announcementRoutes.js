@@ -1,29 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const Announcement = require('../models/Announcement');
+const { getAnnouncements, createAnnouncement } = require('../controllers/announcementController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
-// Get all announcements
-router.get('/', protect, async (req, res) => {
-    try {
-        const announcements = await Announcement.find({}).sort({ createdAt: -1 });
-        res.json(announcements);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// Create announcement (Admin only)
-router.post('/', protect, admin, async (req, res) => {
-    try {
-        const announcement = await Announcement.create({
-            ...req.body,
-            postedBy: req.user._id,
-        });
-        res.status(201).json(announcement);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
+router.get('/', protect, getAnnouncements);
+router.post('/', protect, admin, createAnnouncement);
 
 module.exports = router;

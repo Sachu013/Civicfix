@@ -32,7 +32,7 @@ const ManageComplaints = () => {
                 const { data } = await api.get('/admin/complaints');
                 setComplaints(data);
             } catch (error) {
-                console.error('Vault Access Error:', error);
+                // Ignore or handle gracefully
             } finally {
                 setLoading(false);
             }
@@ -145,8 +145,8 @@ const ManageComplaints = () => {
                                             </div>
                                         </td>
                                         <td className="px-8 py-7">
-                                            <div className={`flex items-center gap-2 font-black text-[10px] uppercase tracking-widest ${c.urgency === 'high' ? 'text-red-600' :
-                                                c.urgency === 'medium' ? 'text-amber-500' : 'text-slate-400'
+                                            <div className={`flex items-center gap-2 font-black text-[10px] uppercase tracking-widest ${['high', 'urgent'].includes(c.urgency?.toLowerCase()) ? 'text-red-600' :
+                                                c.urgency?.toLowerCase() === 'medium' ? 'text-amber-500' : 'text-slate-400'
                                                 }`}>
                                                 <ShieldCheck size={14} />
                                                 {c.urgency || 'Normal'}

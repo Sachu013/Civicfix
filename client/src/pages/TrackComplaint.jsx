@@ -57,9 +57,10 @@ const TrackComplaint = () => {
     ];
 
     const getStatusIndex = (status) => {
-        if (status === 'pending') return 0;
-        if (status === 'in-progress') return 1;
-        if (status === 'resolved') return 2;
+        const s = (status || '').trim().toLowerCase();
+        if (s === 'pending') return 0;
+        if (s === 'in progress' || s === 'in-progress' || s === 'analyzing') return 1;
+        if (s === 'resolved') return 2;
         return 0;
     };
 
@@ -117,11 +118,11 @@ const TrackComplaint = () => {
                                 <h3 className="text-2xl font-black text-slate-900 font-display">Resolution Progress</h3>
                                 <p className="text-slate-500 font-semibold text-sm">Real-time status feed</p>
                             </div>
-                            <div className={`px-5 py-2 rounded-full font-black text-xs uppercase tracking-widest border-2 ${complaint.urgency === 'high' ? 'bg-red-50 border-red-100 text-red-600' :
-                                complaint.urgency === 'medium' ? 'bg-amber-50 border-amber-100 text-amber-600' :
+                            <div className={`px-5 py-2 rounded-full font-black text-xs uppercase tracking-widest border-2 ${['high', 'urgent'].includes(complaint.urgency?.toLowerCase()) ? 'bg-red-50 border-red-100 text-red-600' :
+                                complaint.urgency?.toLowerCase() === 'medium' ? 'bg-amber-50 border-amber-100 text-amber-600' :
                                     'bg-green-50 border-green-100 text-green-600'
                                 }`}>
-                                {complaint.urgency} PRIORITY NODE
+                                {complaint.urgency || 'NORMAL'} PRIORITY NODE
                             </div>
                         </div>
 

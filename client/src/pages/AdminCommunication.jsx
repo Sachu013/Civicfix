@@ -41,7 +41,7 @@ const AdminCommunication = () => {
             setAnnouncements(newsRes.data);
             setFeedback(feedbackRes.data);
         } catch (error) {
-            console.error('Communication Data Failure:', error);
+            // Ignore fetch errors
         } finally {
             setLoading(false);
         }

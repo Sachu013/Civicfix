@@ -47,7 +47,7 @@ const ComplaintDetails = () => {
                     adminResponse: found.adminResponse || ''
                 });
             } catch (error) {
-                console.error('Data Fetch Error:', error);
+                // Ignore fetch errors
             } finally {
                 setLoading(false);
             }

@@ -1,37 +1,23 @@
-const express = require('express');
 const dotenv = require('dotenv');
-const cors = require('cors');
-const path = require('path');
+dotenv.config(); // Load environment variables first
+
 const connectDB = require('./config/db');
-const authRoutes = require('./routes/authRoutes');
-const complaintRoutes = require('./routes/complaintRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-const alertRoutes = require('./routes/alertRoutes');
-const announcementRoutes = require('./routes/announcementRoutes');
-const feedbackRoutes = require('./routes/feedbackRoutes');
-
-dotenv.config();
-
-connectDB();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.use('/api/auth', authRoutes);
-app.use('/api/complaints', complaintRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/alerts', alertRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/feedback', feedbackRoutes);
-
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-app.get('/', (req, res) => {
-    res.send('Smart City API is running...');
-});
+const app = require('./app');
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log('Server running on port ' + PORT);
-});
+
+// Connect to Database, then start the Express server
+const startServer = async () => {
+    try {
+        await connectDB();
+
+        app.listen(PORT, () => {
+            console.log('Server running on port ' + PORT);
+        });
+    } catch (error) {
+        console.error('Server failed to start due to database connection error:', error.message);
+        process.exit(1);
+    }
+};
+
+startServer();

@@ -65,7 +65,7 @@ const Home = () => {
                 setAlerts(alertRes.data);
                 setAnnouncements(newsRes.data);
             } catch (error) {
-                console.error('Sequence Error:', error);
+                // Silently catch fetch errors
             } finally {
                 setLoading(false);
             }

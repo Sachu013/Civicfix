@@ -52,7 +52,7 @@ const AdminDashboard = () => {
             setMetrics(metricsRes.data);
             setComplaints(complaintsRes.data);
         } catch (error) {
-            console.error('Telemetric Sync Error:', error);
+            // Ignore fetch errors
         } finally {
             setLoading(false);
         }

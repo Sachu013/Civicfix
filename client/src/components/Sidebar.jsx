@@ -54,7 +54,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
             <aside className={`fixed top-0 left-0 h-full w-72 bg-white border-r border-slate-100 z-50 transition-all duration-500 lg:translate-x-0 ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
                 <div className="p-8">
-                    <Link to="/citizen-dashboard" className="flex items-center gap-3 group">
+                    <Link to={userInfo?.role === 'admin' ? '/admin-dashboard' : '/citizen-dashboard'} className="flex items-center gap-3 group">
                         <div className="w-10 h-10 bg-primary-600 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-200 group-hover:rotate-12 transition-transform">
                             <ShieldCheck className="text-white" size={24} />
                         </div>
