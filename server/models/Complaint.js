@@ -15,8 +15,19 @@ const complaintSchema = mongoose.Schema(
             required: true,
             enum: ['Garbage', 'Road Damage', 'Water Leakage', 'Electricity', 'Street Light', 'Other'],
         },
+        // Legacy image URL string field for backward compatibility
         imageUrl: { type: String },
-        
+
+        // Production Cloudinary Media Metadata Schema
+        image: {
+            url: { type: String },
+            publicId: { type: String },
+            originalFilename: { type: String },
+            mimeType: { type: String },
+            fileSize: { type: Number },
+            uploadedAt: { type: Date, default: Date.now }
+        },
+
         // Backward-compatible location string representation
         location: { type: String, required: true },
 

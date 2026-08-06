@@ -12,7 +12,10 @@ import {
     Sparkles,
     ChevronRight,
     Copy,
-    Check
+    Check,
+    UploadCloud,
+    X,
+    FileCheck
 } from 'lucide-react';
 import api from '../api';
 
@@ -20,10 +23,14 @@ const SubmitComplaint = () => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        category: 'Road',
+        category: 'Garbage',
         location: '',
         imageUrl: ''
     });
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
+
     const [loading, setLoading] = useState(false);
     const [submittedId, setSubmittedId] = useState(null);
     const [copied, setCopied] = useState(false);
@@ -41,14 +48,83 @@ const SubmitComplaint = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handleFileValidation = (file) => {
+        if (!file) return;
+
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type?.toLowerCase())) {
+            alert('Invalid file format. Only JPG, JPEG, PNG, and WEBP image files are allowed.');
+            return;
+        }
+
+        const maxBytes = 5 * 1024 * 1024; // 5 MB
+        if (file.size > maxBytes) {
+            const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+            alert(`File size (${sizeInMB} MB) exceeds maximum allowed limit of 5 MB.`);
+            return;
+        }
+
+        setSelectedFile(file);
+        setImagePreview(URL.createObjectURL(file));
+    };
+
+    const handleFileInputChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            handleFileValidation(e.target.files[0]);
+        }
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileValidation(e.dataTransfer.files[0]);
+        }
+    };
+
+    const handleRemoveFile = () => {
+        setSelectedFile(null);
+        if (imagePreview) {
+            URL.revokeObjectURL(imagePreview);
+            setImagePreview(null);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
-            const { data } = await api.post('/complaints', formData);
+            const payload = new FormData();
+            payload.append('title', formData.title);
+            payload.append('description', formData.description);
+            payload.append('category', formData.category);
+            payload.append('location', formData.location);
+
+            if (selectedFile) {
+                payload.append('image', selectedFile);
+            } else if (formData.imageUrl) {
+                payload.append('imageUrl', formData.imageUrl);
+            }
+
+            const { data } = await api.post('/complaints', payload, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
             setSubmittedId(data.complaintId);
         } catch (error) {
-            alert('Transmission Error: Deployment failed. Please try again.');
+            const errorMessage = error.response?.data?.message || 'Transmission Error: Deployment failed. Please try again.';
+            alert(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -88,7 +164,17 @@ const SubmitComplaint = () => {
 
                     <div className="flex flex-col sm:flex-row gap-4 w-full">
                         <button
-                            onClick={() => setSubmittedId(null)}
+                            onClick={() => {
+                                setSubmittedId(null);
+                                handleRemoveFile();
+                                setFormData({
+                                    title: '',
+                                    description: '',
+                                    category: 'Garbage',
+                                    location: '',
+                                    imageUrl: ''
+                                });
+                            }}
                             className="btn-secondary flex-1 h-[60px]"
                         >
                             Draft Another Report
@@ -119,10 +205,10 @@ const SubmitComplaint = () => {
                         </div>
                         <h3 className="text-2xl font-black font-display mb-3 tracking-tight">Citizen Reporting Intelligence</h3>
                         <p className="text-primary-100 font-medium leading-relaxed mb-6 opacity-80">
-                            Our AI-assisted platform automatically categorizes your reports and routes them to the highest priority response team within seconds.
+                            Our platform automatically categorizes your reports, secures media uploads, and routes issues to the municipal response team.
                         </p>
                         <div className="space-y-3">
-                            {['256-bit AES Encryption', 'Automatic Geolocation Tagging', 'Priority Node Routing'].map((t, i) => (
+                            {['Cloudinary Media Encryption', 'Automatic Geolocation Tagging', 'Priority Node Routing'].map((t, i) => (
                                 <div key={i} className="flex items-center gap-3 text-xs font-bold uppercase tracking-wider">
                                     <div className="w-1.5 h-1.5 rounded-full bg-secondary-400"></div>
                                     {t}
@@ -141,7 +227,7 @@ const SubmitComplaint = () => {
                         {[
                             { step: '01', title: 'Incident Title', desc: 'Clear, concise description of the observed civic anomaly.' },
                             { step: '02', title: 'Geo-Location', desc: 'Precise coordinates or physical address of the event.' },
-                            { step: '03', title: 'Media Evidence', desc: 'Visual verification of the incident for faster processing.' }
+                            { step: '03', title: 'Media Evidence', desc: 'Secure image file upload (JPG, PNG, WEBP max 5MB).' }
                         ].map((item, i) => (
                             <div key={i} className="flex gap-4 group">
                                 <span className="text-3xl font-black text-slate-100 group-hover:text-primary-50 transition-colors leading-none">{item.step}</span>
@@ -210,37 +296,87 @@ const SubmitComplaint = () => {
                         />
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <MapPin size={14} className="text-primary-500" />
-                                Geo-Location Coordinates
-                            </label>
-                            <input
-                                type="text"
-                                name="location"
-                                value={formData.location}
-                                onChange={handleInputChange}
-                                className="input-field"
-                                placeholder="Ex: Sector 4, Civic Center Block A"
-                                required
-                            />
-                        </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <MapPin size={14} className="text-primary-500" />
+                            Geo-Location Coordinates
+                        </label>
+                        <input
+                            type="text"
+                            name="location"
+                            value={formData.location}
+                            onChange={handleInputChange}
+                            className="input-field"
+                            placeholder="Ex: Sector 4, Civic Center Block A"
+                            required
+                        />
+                    </div>
 
-                        <div className="space-y-2">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <ImageIcon size={14} className="text-secondary-500" />
-                                Evidence Payload (URL)
-                            </label>
-                            <input
-                                type="text"
-                                name="imageUrl"
-                                value={formData.imageUrl}
-                                onChange={handleInputChange}
-                                className="input-field"
-                                placeholder="https://evidence-storage.com/img.jpg"
-                            />
-                        </div>
+                    {/* Image Upload Zone */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <ImageIcon size={14} className="text-secondary-500" />
+                            Evidence Media Payload (Cloud Storage)
+                        </label>
+
+                        {!imagePreview ? (
+                            <div
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                className={`border-2 border-dashed rounded-[2rem] p-8 text-center transition-all cursor-pointer ${
+                                    isDragging
+                                        ? 'border-primary-500 bg-primary-50/50 scale-[1.01]'
+                                        : 'border-slate-200 hover:border-primary-400 bg-slate-50/50 hover:bg-white'
+                                }`}
+                            >
+                                <input
+                                    type="file"
+                                    id="image-file-input"
+                                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                                    onChange={handleFileInputChange}
+                                    className="hidden"
+                                />
+                                <label htmlFor="image-file-input" className="cursor-pointer flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-primary-50 text-primary-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
+                                        <UploadCloud size={32} />
+                                    </div>
+                                    <p className="text-sm font-black text-slate-800 mb-1">
+                                        Click to upload or drag & drop evidence image
+                                    </p>
+                                    <p className="text-xs font-semibold text-slate-400">
+                                        Supports JPG, JPEG, PNG, WEBP (Max 5 MB)
+                                    </p>
+                                </label>
+                            </div>
+                        ) : (
+                            <div className="relative rounded-[2rem] overflow-hidden border border-slate-200 bg-slate-50 p-4 flex items-center gap-6">
+                                <img
+                                    src={imagePreview}
+                                    alt="Selected Preview"
+                                    className="w-24 h-24 object-cover rounded-2xl shadow-md border border-white"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <FileCheck size={18} className="text-green-500 shrink-0" />
+                                        <p className="text-sm font-black text-slate-900 truncate">
+                                            {selectedFile?.name || 'Selected Image'}
+                                        </p>
+                                    </div>
+                                    <p className="text-xs font-semibold text-slate-400">
+                                        Size: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for Cloud Transmission
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveFile}
+                                    className="p-3 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm border border-slate-100 mr-2"
+                                    title="Remove Selected Image"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <button

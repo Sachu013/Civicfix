@@ -1,6 +1,7 @@
 const Complaint = require('../models/Complaint');
 const ErrorResponse = require('../utils/errorResponse');
 const geoService = require('./geoService');
+const uploadService = require('./uploadService');
 
 // Keywords for auto-categorization and urgency
 const categories = {
@@ -47,6 +48,7 @@ const createComplaint = async ({
     description,
     location,
     imageUrl,
+    imageFile,
     latitude,
     longitude,
     formattedAddress,
@@ -79,6 +81,23 @@ const createComplaint = async ({
 
     const formattedGeo = geoService.formatLocationData(rawLocationInput);
 
+    // Process Image Upload or Legacy URL
+    let imageMetadata = null;
+    let finalImageUrl = imageUrl || '';
+
+    if (imageFile) {
+        imageMetadata = await uploadService.uploadImage(imageFile);
+        finalImageUrl = imageMetadata.url;
+    } else if (imageUrl) {
+        imageMetadata = {
+            url: imageUrl,
+            originalFilename: 'legacy_url',
+            mimeType: 'image/jpeg',
+            fileSize: 0,
+            uploadedAt: new Date()
+        };
+    }
+
     // Simple ID generator
     const complaintId = 'CMP' + Date.now().toString().slice(-8);
 
@@ -87,7 +106,8 @@ const createComplaint = async ({
         user: userId,
         title,
         description,
-        imageUrl,
+        imageUrl: finalImageUrl,
+        image: imageMetadata,
         category: analysis.category,
         urgency: analysis.urgency,
         assignedDepartment: analysis.assignedDepartment,

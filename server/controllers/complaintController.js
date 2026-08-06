@@ -1,7 +1,7 @@
 const complaintService = require('../services/complaintService');
 const asyncHandler = require('../utils/asyncHandler');
 
-// @desc    Submit a complaint
+// @desc    Submit a complaint (supports JSON and multipart/form-data with image file)
 // @route   POST /api/complaints
 const submitComplaint = asyncHandler(async (req, res) => {
     const {
@@ -27,6 +27,7 @@ const submitComplaint = asyncHandler(async (req, res) => {
         description,
         location,
         imageUrl,
+        imageFile: req.file, // Passed from Multer uploadSingleImage middleware
         latitude,
         longitude,
         formattedAddress,
