@@ -247,6 +247,8 @@ const getDepartmentUsers = asyncHandler(async (req, res) => {
     const users = await User.find({
         role: { $in: ['department_head', 'department_staff'] },
     }).select('-password').sort({ role: 1, departmentCode: 1 });
+    res.json(users);
+});
 
 // @desc    Update complaint priority with auditability and scope check
 // @route   PATCH /api/admin/complaints/:id/priority
