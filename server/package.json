@@ -1,22 +1,36 @@
 {
-  "name": "server",
+  "name": "civicfix-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "CivicFix Backend API Server — Multi-Department AI Civic Issue Platform",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "node server.js",
     "seed": "node seed.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/security/accessControl.test.js",
+    "test:all": "node tests/runAllTests.js",
+    "test:unit": "node tests/unit/classification.test.js && node tests/unit/duplicateDetection.test.js && node tests/unit/semanticDuplicates.test.js",
+    "test:integration": "node tests/integration/complaintLifecycle.test.js && node tests/integration/departmentAuthorization.test.js && node tests/integration/analyticsOverview.test.js && node tests/integration/analyticsHotspots.test.js",
+    "test:security": "node tests/security/securityBoundary.test.js && node tests/security/accessControl.test.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "civicfix",
+    "smartcity",
+    "express",
+    "mongodb",
+    "ai",
+    "civic"
+  ],
+  "author": "CivicFix Engineering Team",
   "license": "ISC",
   "dependencies": {
+    "@xenova/transformers": "^2.17.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "jimp": "^1.6.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.4",
     "multer": "^2.1.1"

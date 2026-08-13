@@ -7,15 +7,16 @@ import Home from './pages/Home';
 import SubmitComplaint from './pages/SubmitComplaint';
 import TrackComplaint from './pages/TrackComplaint';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminAnalytics from './pages/AdminAnalytics';
 import ManageComplaints from './pages/ManageComplaints';
 import ComplaintDetails from './pages/ComplaintDetails';
 import Profile from './pages/Profile';
 import AdminCommunication from './pages/AdminCommunication';
 
-// Pages placeholders (none left!)
-
 const App = () => {
   const { userInfo } = useAuth();
+  const role = userInfo?.role;
+  const isAdminRole = ['admin', 'super_admin', 'department_head', 'department_staff'].includes(role);
 
   return (
     <Routes>
@@ -23,9 +24,10 @@ const App = () => {
 
       {/* Protected Routes */}
       <Route element={userInfo ? <Layout /> : <Navigate to="/login" />}>
-        {userInfo?.role === 'admin' ? (
+        {isAdminRole ? (
           <>
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/analytics" element={<AdminAnalytics />} />
             <Route path="/admin/manage" element={<ManageComplaints />} />
             <Route path="/admin/complaint/:id" element={<ComplaintDetails />} />
             <Route path="/admin/communication" element={<AdminCommunication />} />

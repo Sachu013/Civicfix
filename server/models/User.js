@@ -8,8 +8,16 @@ const userSchema = mongoose.Schema(
         password: { type: String, required: true },
         role: {
             type: String,
-            enum: ['citizen', 'admin'],
+            enum: ['citizen', 'admin', 'super_admin', 'department_head', 'department_staff'],
             default: 'citizen',
+        },
+        departmentCode: {
+            type: String,
+            default: undefined,
+        },
+        department: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Department',
         },
     },
     { timestamps: true }

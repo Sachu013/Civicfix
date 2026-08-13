@@ -4,72 +4,143 @@ import {
     ArrowLeft,
     MapPin,
     Clock,
-    Tag,
     User,
-    AlertCircle,
     ShieldCheck,
     CheckCircle2,
-    Calendar,
-    Layers,
-    ChevronRight,
-    TrendingUp,
-    Activity,
     Zap,
-    Bot
+    Building2,
+    AlertTriangle,
+    Activity,
+    Bot,
+    History,
+    Check,
+    Upload,
+    Loader2
 } from 'lucide-react';
 import api from '../api';
+
+const WORKFLOW_STAGES = [
+    'Submitted',
+    'Verified',
+    'Assigned',
+    'In Progress',
+    'Resolved',
+    'Citizen Verification',
+    'Closed'
+];
 
 const ComplaintDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [complaint, setComplaint] = useState(null);
+    const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
-    const [formData, setFormData] = useState({
-        status: '',
-        assignedDepartment: '',
-        urgency: '',
-        adminResponse: ''
-    });
 
-    const departments = ['Sanitation Department', 'Public Works Department', 'Water Supply Department', 'Power Department', 'Electrical Department', 'General Administration'];
+    // Status Update Form State
+    const [statusForm, setStatusForm] = useState({
+        status: '',
+        note: '',
+        resolutionNote: '',
+    });
+    const [resolutionImageFile, setResolutionImageFile] = useState(null);
+
+    // Reassignment Modal State
+    const [showReassignModal, setShowReassignModal] = useState(false);
+    const [targetDeptCode, setTargetDeptCode] = useState('');
+    const [reassignReason, setReassignReason] = useState('');
+
+    // Escalation Modal State
+    const [showEscalateModal, setShowEscalateModal] = useState(false);
+    const [escalateReason, setEscalateReason] = useState('');
+
+    const fetchComplaintDetails = async () => {
+        try {
+            const [complaintsRes, deptsRes] = await Promise.all([
+                api.get('/admin/complaints'),
+                api.get('/departments')
+            ]);
+            const found = complaintsRes.data.find(c => c._id === id);
+            setComplaint(found);
+            setDepartments(deptsRes.data);
+
+            if (found) {
+                setStatusForm({
+                    status: found.status,
+                    note: '',
+                    resolutionNote: found.resolution?.resolutionNote || '',
+                });
+                setTargetDeptCode(found.departmentCode || 'GENERAL');
+            }
+        } catch (error) {
+            console.error('Failed to load complaint details:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchComplaint = async () => {
-            try {
-                const { data } = await api.get('/admin/complaints');
-                const found = data.find(c => c._id === id);
-                setComplaint(found);
-                setFormData({
-                    status: found.status,
-                    assignedDepartment: found.assignedDepartment || '',
-                    urgency: found.urgency || 'Medium',
-                    adminResponse: found.adminResponse || ''
-                });
-            } catch (error) {
-                // Ignore fetch errors
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchComplaint();
+        fetchComplaintDetails();
     }, [id]);
 
-    const handleUpdate = async (e) => {
+    const handleUpdateStatus = async (e) => {
         e.preventDefault();
         setUpdating(true);
         try {
-            await api.put(`/admin/complaints/${id}`, formData);
-            alert('Operational parameters synchronized successfully.');
-            navigate('/admin-dashboard');
+            const formData = new FormData();
+            formData.append('status', statusForm.status);
+            if (statusForm.note) formData.append('note', statusForm.note);
+            if (statusForm.resolutionNote) formData.append('resolutionNote', statusForm.resolutionNote);
+            if (resolutionImageFile) formData.append('image', resolutionImageFile);
+
+            await api.put(`/admin/complaints/${id}/status`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            alert(`Workflow status successfully updated to ${statusForm.status}`);
+            await fetchComplaintDetails();
         } catch (error) {
-            alert('Synchronization Error: Parameter update failed.');
+            alert(error.response?.data?.message || 'Failed to update workflow status');
         } finally {
             setUpdating(false);
         }
     };
 
-    if (loading) return (
+    const handleReassign = async () => {
+        setUpdating(true);
+        try {
+            await api.post(`/admin/complaints/${id}/assign`, {
+                departmentCode: targetDeptCode,
+                reason: reassignReason || 'Manual administrative department update',
+            });
+            setShowReassignModal(false);
+            setReassignReason('');
+            alert('Department reassigned successfully');
+            await fetchComplaintDetails();
+        } catch (error) {
+            alert('Failed to reassign department');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleEscalate = async () => {
+        setUpdating(true);
+        try {
+            await api.post(`/admin/complaints/${id}/escalate`, {
+                reason: escalateReason || 'Manual administrative escalation',
+            });
+            setShowEscalateModal(false);
+            setEscalateReason('');
+            alert('Complaint manually escalated');
+            await fetchComplaintDetails();
+        } catch (error) {
+            alert('Failed to escalate complaint');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    if (loading || !complaint) return (
         <div className="max-w-6xl mx-auto space-y-10 py-10">
             <div className="h-20 bg-white rounded-3xl shimmer"></div>
             <div className="grid lg:grid-cols-3 gap-8">
@@ -79,227 +150,388 @@ const ComplaintDetails = () => {
         </div>
     );
 
-    return (
-        <div className="max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    const currentStageIndex = WORKFLOW_STAGES.indexOf(complaint.status) !== -1
+        ? WORKFLOW_STAGES.indexOf(complaint.status)
+        : complaint.status === 'Reopened' ? 3 : 0;
 
+    return (
+        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
             {/* Header Actions */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => navigate('/admin/manage')}
+                        onClick={() => navigate('/admin-dashboard')}
                         className="p-3 text-slate-400 hover:text-primary-600 bg-white rounded-2xl shadow-sm border border-slate-100 transition-all hover:-translate-x-1"
                     >
                         <ArrowLeft size={22} />
                     </button>
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Incident Root Analysis</p>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Incident Root Analysis</span>
                             <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
-                            <p className="text-[10px] font-black text-primary-600 uppercase tracking-widest">#{complaint.complaintId}</p>
+                            <span className="text-[10px] font-black text-primary-600 uppercase tracking-widest">#{complaint.complaintId}</span>
                         </div>
-                        <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">Technical Documentation</h1>
+                        <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">Complaint Lifecycle & Operational Control</h1>
                     </div>
                 </div>
+
                 <div className="flex items-center gap-3">
-                    <div className={`px-5 py-2 rounded-xl border font-black text-[10px] uppercase tracking-widest ${complaint.urgency === 'high' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-slate-50 border-slate-100 text-slate-500'
-                        }`}>
-                        {complaint.urgency} Priority Level
-                    </div>
+                    <span className={`px-4 py-1.5 rounded-xl border font-black text-[10px] uppercase tracking-widest ${
+                        complaint.priority === 'Critical' ? 'bg-red-50 border-red-200 text-red-700' :
+                        complaint.priority === 'High' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-slate-50 border-slate-200 text-slate-700'
+                    }`}>
+                        Priority: {complaint.priority || complaint.severity || 'Medium'}
+                    </span>
+                    <span className={`px-4 py-1.5 rounded-xl text-white font-black text-[10px] uppercase tracking-widest ${
+                        complaint.status === 'Resolved' || complaint.status === 'Closed' ? 'bg-emerald-600' : 'bg-primary-600'
+                    }`}>
+                        {complaint.status}
+                    </span>
                 </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-10 items-start">
-                {/* Main Content Card */}
+            {/* Workflow Progression Stepper */}
+            <div className="card-premium p-6 bg-white border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Operational Status Progression Workflow</p>
+                <div className="flex items-center justify-between relative overflow-x-auto pb-2">
+                    {WORKFLOW_STAGES.map((stage, idx) => {
+                        const isDone = idx < currentStageIndex;
+                        const isCurrent = idx === currentStageIndex;
+                        return (
+                            <div key={stage} className="flex flex-col items-center min-w-[100px] text-center z-10">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                                    isDone ? 'bg-emerald-500 text-white shadow-md' :
+                                    isCurrent ? 'bg-primary-600 text-white ring-4 ring-primary-100' : 'bg-slate-100 text-slate-400'
+                                }`}>
+                                    {isDone ? <Check size={16} /> : idx + 1}
+                                </div>
+                                <span className={`text-[10px] font-extrabold mt-2 ${
+                                    isCurrent ? 'text-primary-600' : isDone ? 'text-slate-800' : 'text-slate-400'
+                                }`}>
+                                    {stage}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-8 items-start">
+                {/* Main Details Area */}
                 <div className="lg:col-span-2 space-y-8">
-                    <div className="card-premium p-10 lg:p-14 space-y-10 bg-white">
+                    {/* Complaint Overview */}
+                    <div className="card-premium p-8 bg-white space-y-6">
                         <div className="flex items-start justify-between">
                             <div>
-                                <span className="inline-block px-3 py-1 bg-primary-50 text-primary-700 rounded-lg text-[10px] font-black uppercase tracking-widest mb-4">
-                                    Observed Anomaly v1.0
+                                <span className="inline-block px-3 py-1 bg-primary-50 text-primary-700 rounded-lg text-[10px] font-black uppercase tracking-widest mb-3">
+                                    {complaint.category} • {complaint.subcategory || 'General'}
                                 </span>
-                                <h2 className="text-4xl font-black text-slate-900 font-display leading-[1.1] tracking-tight">{complaint.title}</h2>
-                            </div>
-                            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-primary-600 shadow-sm border border-slate-100">
-                                <Zap size={28} />
+                                <h2 className="text-3xl font-black text-slate-900 font-display">{complaint.title}</h2>
                             </div>
                         </div>
 
-                        <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 shadow-inner relative group">
-                            <div className="absolute top-6 left-6 text-slate-200 group-hover:text-primary-100 transition-colors">
-                                <MessageSquare size={48} />
-                            </div>
-                            <p className="relative z-10 text-xl text-slate-700 font-semibold leading-relaxed tracking-tight italic py-4">
+                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p className="text-slate-700 font-medium text-sm leading-relaxed italic">
                                 "{complaint.description}"
                             </p>
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-primary-100 transition-colors">
-                                <div className="w-12 h-12 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <MapPin size={24} />
-                                </div>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="p-4 rounded-xl bg-white border border-slate-100 flex items-center gap-3">
+                                <MapPin size={20} className="text-primary-600" />
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Physical Coordinates</p>
-                                    <p className="font-extrabold text-slate-900">{complaint.location}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase">Location</p>
+                                    <p className="font-extrabold text-xs text-slate-800">{complaint.location}</p>
                                 </div>
                             </div>
-                            <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-secondary-100 transition-colors">
-                                <div className="w-12 h-12 rounded-xl bg-secondary-50 text-secondary-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <CheckCircle2 size={24} />
-                                </div>
+                            <div className="p-4 rounded-xl bg-white border border-slate-100 flex items-center gap-3">
+                                <Clock size={20} className="text-primary-600" />
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Detection Sector</p>
-                                    <p className="font-extrabold text-slate-900">{complaint.category} Infrastructure</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase">Submission Timestamp</p>
+                                    <p className="font-extrabold text-xs text-slate-800">{new Date(complaint.createdAt).toLocaleString()}</p>
                                 </div>
                             </div>
                         </div>
 
                         {complaint.imageUrl && (
-                            <div className="space-y-4">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2 mb-4">Evidence Payload Visualization</p>
-                                <div className="rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-white group">
-                                    <img
-                                        src={complaint.imageUrl}
-                                        alt="Incident Documentation"
-                                        className="w-full h-auto object-cover transition-transform duration-1000 group-hover:scale-110"
-                                    />
+                            <div className="space-y-2">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evidence Payload Visualization</p>
+                                <div className="rounded-2xl overflow-hidden border border-slate-200 max-h-96">
+                                    <img src={complaint.imageUrl} alt="Evidence" className="w-full h-full object-cover" />
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* User Node Info */}
-                    <div className="card-premium p-10 bg-slate-900 text-white border-none group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-white/5 to-transparent"></div>
-                        <div className="relative z-10 flex items-center justify-between">
-                            <div className="flex items-center gap-6">
-                                <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-[1.5rem] flex items-center justify-center text-primary-400 shadow-2xl transition-transform group-hover:rotate-6">
-                                    <Fingerprint size={32} />
+                    {/* AI Multimodal Classification metadata (Sprint 6 Retained) */}
+                    {complaint.aiClassification && (
+                        <div className="card-premium p-6 bg-slate-900 text-white space-y-4">
+                            <div className="flex items-center gap-3 text-primary-400">
+                                <Bot size={20} />
+                                <h3 className="text-sm font-black uppercase tracking-widest">Sprint 6 AI Classification Intelligence</h3>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                <div>
+                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Category</span>
+                                    <span className="font-bold text-white">{complaint.aiClassification.category}</span>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40 mb-1">Source Subject Identity</p>
-                                    <h4 className="text-2xl font-black font-display tracking-tight leading-none">{complaint.user?.name || 'Anonymous Node'}</h4>
-                                    <p className="text-sm font-semibold text-white/60 mt-2">{complaint.user?.email || 'N/A'}</p>
+                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Subcategory</span>
+                                    <span className="font-bold text-white">{complaint.aiClassification.subcategory}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Severity</span>
+                                    <span className="font-bold text-white">{complaint.aiClassification.severity}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">AI Confidence</span>
+                                    <span className="font-bold text-emerald-400">{((complaint.aiClassification.confidence || 0.85) * 100).toFixed(1)}%</span>
                                 </div>
                             </div>
-                            <div className="hidden sm:block text-right">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Identity Verification</p>
-                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg text-[10px] font-black uppercase tracking-widest">
-                                    <ShieldCheck size={12} />
-                                    Authenticated
+
+                            {complaint.aiClassification.reasoning && (
+                                <div className="p-3 bg-white/10 rounded-xl text-xs text-slate-300 italic">
+                                    "{complaint.aiClassification.reasoning}"
                                 </div>
-                            </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Audit History Timeline */}
+                    <div className="card-premium p-6 bg-white space-y-6">
+                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <History size={18} className="text-primary-600" />
+                            <h3 className="text-sm font-black text-slate-900 uppercase">Audit Trail & Assignment History</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                            {complaint.assignmentHistory && complaint.assignmentHistory.length > 0 ? (
+                                complaint.assignmentHistory.map((hist, idx) => (
+                                    <div key={idx} className="flex gap-4 items-start text-xs border-l-2 border-primary-200 pl-4 py-1">
+                                        <div className="space-y-1">
+                                            <p className="font-bold text-slate-900">
+                                                Reassigned to <span className="text-primary-600">{hist.newDepartmentName}</span> ({hist.newDepartmentCode})
+                                            </p>
+                                            <p className="text-slate-500 font-medium">{hist.reason}</p>
+                                            <span className="text-[10px] text-slate-400 font-mono block">{new Date(hist.timestamp).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-slate-400 italic">No previous reassignment records logged.</p>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* Action Sidebar */}
-                <div className="space-y-8 sticky top-28">
-                    <div className="card-premium p-8 lg:p-10">
-                        <div className="flex items-center gap-3 mb-8">
-                            <div className="w-10 h-10 bg-primary-50 text-primary-600 rounded-xl flex items-center justify-center">
-                                <Activity size={20} />
+                {/* Operations Control Sidebar */}
+                <div className="space-y-6">
+                    {/* Department Assignment Box */}
+                    <div className="card-premium p-6 bg-white space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Building2 size={18} className="text-primary-600" />
+                                <h3 className="text-xs font-black uppercase text-slate-900">Assigned Department</h3>
                             </div>
-                            <h3 className="text-xl font-black text-slate-900 font-display italic">Resolution Control</h3>
+                            <button
+                                onClick={() => setShowReassignModal(true)}
+                                className="text-[10px] font-black text-primary-600 uppercase hover:underline"
+                            >
+                                Reassign
+                            </button>
                         </div>
 
-                        <form onSubmit={handleUpdate} className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Protocol Status</label>
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                            <p className="font-extrabold text-sm text-slate-900">{complaint.assignedDepartment || 'General Administration'}</p>
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                                <span>Code: {complaint.departmentCode || 'GENERAL'}</span>
+                                <span>Source: {complaint.assignmentSource || 'automatic'}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SLA Tracking Card */}
+                    <div className="card-premium p-6 bg-white space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Clock size={18} className="text-amber-500" />
+                                <h3 className="text-xs font-black uppercase text-slate-900">SLA Performance</h3>
+                            </div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                complaint.sla?.status === 'breached' ? 'bg-red-100 text-red-700' :
+                                complaint.sla?.status === 'due_soon' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                                {complaint.sla?.status || 'on_track'}
+                            </span>
+                        </div>
+
+                        <div className="space-y-2 text-xs">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold text-[10px] uppercase">Started:</span>
+                                <span className="font-bold text-slate-800">{complaint.sla ? new Date(complaint.sla.startedAt).toLocaleString() : 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold text-[10px] uppercase">Deadline:</span>
+                                <span className="font-bold text-slate-800">{complaint.sla ? new Date(complaint.sla.dueAt).toLocaleString() : 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-bold text-[10px] uppercase">Target Duration:</span>
+                                <span className="font-bold text-slate-800">{complaint.sla?.durationHours || 168} Hours</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Escalation Control Card */}
+                    <div className="card-premium p-6 bg-white space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle size={18} className="text-purple-600" />
+                                <h3 className="text-xs font-black uppercase text-slate-900">Escalation Status</h3>
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-purple-100 text-purple-800">
+                                Level {complaint.escalationLevel || 0}
+                            </span>
+                        </div>
+
+                        <button
+                            onClick={() => setShowEscalateModal(true)}
+                            className="w-full py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-bold transition-colors"
+                        >
+                            Trigger Manual Escalation
+                        </button>
+                    </div>
+
+                    {/* Workflow Status Progression Controls Form */}
+                    <div className="card-premium p-6 bg-white space-y-4">
+                        <h3 className="text-xs font-black uppercase text-slate-900">Advance Workflow Status</h3>
+
+                        <form onSubmit={handleUpdateStatus} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">New Status</label>
                                 <select
-                                    className="input-field cursor-pointer"
-                                    value={formData.status}
-                                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                    value={statusForm.status}
+                                    onChange={(e) => setStatusForm({ ...statusForm, status: e.target.value })}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                                 >
-                                    <option value="Pending">PENDING ANALYSIS</option>
-                                    <option value="In Progress">IN-PROGRESS RESOLUTION</option>
-                                    <option value="Resolved">DEPLOYED RESOLUTION (COMPLETED)</option>
+                                    {WORKFLOW_STAGES.map((s) => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                    <option value="Rejected">Rejected</option>
+                                    <option value="Reopened">Reopened</option>
                                 </select>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Operational Routing</label>
-                                <select
-                                    className="input-field cursor-pointer"
-                                    value={formData.assignedDepartment}
-                                    onChange={(e) => setFormData({ ...formData, assignedDepartment: e.target.value })}
-                                >
-                                    <option value="">INITIALIZE ROUTING...</option>
-                                    {departments.map((dept) => (
-                                        <option key={dept} value={dept}>{dept.toUpperCase()}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Priority Calibration</label>
-                                <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
-                                    {['Low', 'Medium', 'High'].map((level) => (
-                                        <button
-                                            key={level}
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, urgency: level })}
-                                            className={`py-2 px-1 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.urgency === level
-                                                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-100'
-                                                : 'text-slate-400 hover:text-slate-600'
-                                                }`}
-                                        >
-                                            {level}
-                                        </button>
-                                    ))}
+                            {statusForm.status === 'Resolved' && (
+                                <div className="space-y-3 p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                                    <label className="text-[10px] font-bold text-emerald-800 uppercase block">Resolution Notes</label>
+                                    <textarea
+                                        rows={2}
+                                        placeholder="Enter work details & resolution notes..."
+                                        value={statusForm.resolutionNote}
+                                        onChange={(e) => setStatusForm({ ...statusForm, resolutionNote: e.target.value })}
+                                        className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs"
+                                    />
+                                    <div>
+                                        <label className="text-[10px] font-bold text-emerald-800 uppercase block mb-1">Optional Resolution Evidence Image</label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => setResolutionImageFile(e.target.files[0])}
+                                            className="text-xs text-slate-600"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Official Transmission (Feedback)</label>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Audit Note / Comment</label>
                                 <textarea
-                                    className="w-full h-32 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all placeholder:text-slate-300"
-                                    placeholder="Enter formal response to citizen..."
-                                    value={formData.adminResponse}
-                                    onChange={(e) => setFormData({ ...formData, adminResponse: e.target.value })}
+                                    rows={2}
+                                    placeholder="Add reason or status change comment..."
+                                    value={statusForm.note}
+                                    onChange={(e) => setStatusForm({ ...statusForm, note: e.target.value })}
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
                                 />
                             </div>
 
                             <button
                                 type="submit"
                                 disabled={updating}
-                                className="w-full btn-teal h-16 group/btn !rounded-[1.5rem]"
+                                className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"
                             >
-                                {updating ? (
-                                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                ) : (
-                                    <>
-                                        <Zap size={20} className="group-hover/btn:scale-125 transition-transform" />
-                                        Synchronize Vault
-                                    </>
-                                )}
+                                {updating && <Loader2 className="animate-spin" size={14} />}
+                                <span>Save Status Transition</span>
                             </button>
                         </form>
                     </div>
+                </div>
+            </div>
 
-                    {/* AI Suggestion Widget */}
-                    <div className="card-premium p-8 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none relative overflow-hidden group">
-                        <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center">
-                                    <Bot size={22} className="text-secondary-400" />
-                                </div>
-                                <h3 className="text-lg font-black font-display uppercase tracking-widest">AI Analyst</h3>
+            {/* Reassign Department Modal */}
+            {showReassignModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl">
+                        <h3 className="text-lg font-black text-slate-900 uppercase italic">Reassign Department</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Target Department</label>
+                                <select
+                                    value={targetDeptCode}
+                                    onChange={(e) => setTargetDeptCode(e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                                >
+                                    {departments.map((d) => (
+                                        <option key={d._id} value={d.code}>{d.name} ({d.code})</option>
+                                    ))}
+                                </select>
                             </div>
-                            <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 mb-6">
-                                <p className="text-[10px] font-black text-white/60 mb-1 leading-none">Predicted Assignment</p>
-                                <p className="text-sm font-bold tracking-tight">Security & Infrastructure Intelligence</p>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Audit Reason</label>
+                                <textarea
+                                    rows={3}
+                                    placeholder="Enter reason for department reassignment..."
+                                    value={reassignReason}
+                                    onChange={(e) => setReassignReason(e.target.value)}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                                />
                             </div>
-                            <div className="space-y-2">
-                                <p className="text-[10px] font-bold text-white/50 leading-relaxed italic">
-                                    "Pattern recognition confirms 82% similarity with previous sector outages. Priority recommendation: INTERMEDIATE."
-                                </p>
-                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                            <button onClick={() => setShowReassignModal(false)} className="px-4 py-2 bg-slate-100 text-xs font-bold rounded-xl">Cancel</button>
+                            <button onClick={handleReassign} disabled={updating} className="px-5 py-2 bg-primary-600 text-white text-xs font-bold rounded-xl">Confirm</button>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {/* Escalate Modal */}
+            {showEscalateModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl">
+                        <h3 className="text-lg font-black text-slate-900 uppercase italic">Manual Administrative Escalation</h3>
+
+                        <div>
+                            <label className="text-xs font-bold text-slate-600 uppercase mb-1 block">Escalation Reason</label>
+                            <textarea
+                                rows={3}
+                                placeholder="Enter justification for administrative escalation..."
+                                value={escalateReason}
+                                onChange={(e) => setEscalateReason(e.target.value)}
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                            <button onClick={() => setShowEscalateModal(false)} className="px-4 py-2 bg-slate-100 text-xs font-bold rounded-xl">Cancel</button>
+                            <button onClick={handleEscalate} disabled={updating} className="px-5 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl">Escalate</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

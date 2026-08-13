@@ -182,60 +182,95 @@ const Home = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Recent Reports */}
-                <div className="lg:col-span-2 card-premium p-8 lg:p-10 flex flex-col">
-                    <div className="flex justify-between items-center mb-10">
+                {/* My Complaints Section */}
+                <div className="lg:col-span-2 card-premium p-8 lg:p-10 flex flex-col space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
                         <div>
-                            <h2 className="text-2xl font-black text-slate-900 font-display">Recent Operations</h2>
-                            <p className="text-slate-500 text-sm font-semibold">Live feed of your reported sequences</p>
+                            <h2 className="text-2xl font-black text-slate-900 font-display tracking-tight">My Complaints</h2>
+                            <p className="text-slate-500 text-xs font-semibold">Track and view all civic issues submitted by your account</p>
                         </div>
-                        <Link to="/track" className="text-primary-600 font-bold text-sm flex items-center gap-1 hover:underline">
-                            View All Vault <ArrowRight size={16} />
+                        <Link to="/submit" className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all uppercase tracking-wider shrink-0">
+                            <PlusCircle size={16} />
+                            <span>Report New Issue</span>
                         </Link>
                     </div>
 
                     <div className="space-y-4 flex-1">
                         {loading ? (
                             [1, 2, 3].map(i => (
-                                <div key={i} className="h-20 bg-slate-50 rounded-3xl shimmer"></div>
+                                <div key={i} className="h-24 bg-slate-50 rounded-3xl shimmer"></div>
                             ))
                         ) : complaints.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200">
-                                <MessageSquare size={48} className="text-slate-200 mb-4" />
-                                <p className="text-slate-400 font-bold uppercase tracking-widest text-sm text-center">No Data in Local Vault</p>
+                            <div className="flex flex-col items-center justify-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center space-y-3">
+                                <div className="w-12 h-12 bg-slate-200/60 rounded-2xl flex items-center justify-center text-slate-400">
+                                    <MessageSquare size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-slate-700 font-bold text-sm">You haven't submitted any complaints yet.</p>
+                                    <p className="text-slate-400 text-xs font-medium mt-0.5">Report local potholes, water leaks, or street light issues to your city administration.</p>
+                                </div>
+                                <Link to="/submit" className="px-4 py-2 bg-primary-600 text-white font-bold text-xs rounded-xl inline-flex items-center gap-1.5 mt-2">
+                                    <PlusCircle size={14} />
+                                    <span>Submit Complaint Now</span>
+                                </Link>
                             </div>
                         ) : (
-                            complaints.slice(0, 4).map((c) => (
-                                <Link
+                            complaints.map((c) => (
+                                <div
                                     key={c._id}
-                                    to={`/track?id=${c.complaintId}`}
-                                    className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[1.5rem] hover:shadow-xl hover:border-primary-100 transition-all group"
+                                    className="p-5 bg-white border border-slate-150 rounded-2xl hover:shadow-lg hover:border-primary-200 transition-all space-y-3"
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
-                                            <MapPin size={22} />
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-mono text-xs font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                                                #{c.complaintId}
+                                            </span>
+                                            <h3 className="font-bold text-slate-900 text-base line-clamp-1">{c.title}</h3>
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-slate-900 group-hover:text-primary-600 transition-colors line-clamp-1">{c.title}</p>
-                                            <p className="text-xs font-bold text-slate-400 tracking-wider">ID: #{c.complaintId}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="hidden sm:block text-right">
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${c.status === 'resolved' ? 'text-green-500' :
-                                                c.status === 'in-progress' ? 'text-amber-500' : 'text-slate-400'
-                                                }`}>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                                c.priority === 'Critical' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                                c.priority === 'High' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                                c.priority === 'Medium' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                                'bg-slate-100 text-slate-600'
+                                            }`}>
+                                                {c.priority || 'Medium'} Priority
+                                            </span>
+                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                                c.status === 'Resolved' || c.status === 'Closed' ? 'bg-emerald-100 text-emerald-700' :
+                                                c.status === 'In Progress' || c.status === 'Assigned' ? 'bg-amber-100 text-amber-700' :
+                                                'bg-slate-100 text-slate-700'
+                                            }`}>
                                                 {c.status}
-                                            </p>
-                                            <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className={`h-full ${c.status === 'resolved' ? 'w-full bg-green-500' :
-                                                    c.status === 'in-progress' ? 'w-1/2 bg-amber-500' : 'w-1/4 bg-slate-300'
-                                                    }`}></div>
-                                            </div>
+                                            </span>
                                         </div>
-                                        <ChevronRight className="text-slate-300 group-hover:text-primary-500 group-hover:translate-x-1 transition-all" size={20} />
                                     </div>
-                                </Link>
+
+                                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 font-medium pt-1 border-t border-slate-100">
+                                        <div className="flex flex-wrap items-center gap-4">
+                                            <div className="flex items-center gap-1 text-slate-600 font-semibold">
+                                                <MapPin size={14} className="text-primary-500 shrink-0" />
+                                                <span className="truncate max-w-[200px]">{c.location || c.assignedDepartment || 'City Area'}</span>
+                                            </div>
+                                            <span className="text-slate-300">•</span>
+                                            <span className="text-slate-500 font-bold">{c.category}</span>
+                                            {c.assignedDepartment && (
+                                                <>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="text-slate-500 font-semibold">{c.assignedDepartment}</span>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <Link
+                                            to={`/track?id=${c.complaintId}`}
+                                            className="px-3 py-1.5 bg-slate-100 hover:bg-primary-50 text-slate-700 hover:text-primary-600 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 ml-auto"
+                                        >
+                                            <span>Track Complaint</span>
+                                            <ArrowRight size={14} />
+                                        </Link>
+                                    </div>
+                                </div>
                             ))
                         )}
                     </div>

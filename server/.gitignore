@@ -1,9 +1,13 @@
 node_modules/
 .env
+.env.*
+!.env.example
 *.log
 npm-debug.log*
-.DS_Store
+yarn-debug.log*
 dist/
 build/
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db

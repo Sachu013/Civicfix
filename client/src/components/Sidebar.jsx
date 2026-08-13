@@ -14,7 +14,8 @@ import {
     ShieldCheck,
     LifeBuoy,
     ChevronRight,
-    Megaphone
+    Megaphone,
+    BarChart3
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -36,11 +37,22 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
     const adminLinks = [
         { name: 'Admin Insights', path: '/admin-dashboard', icon: LayoutDashboard },
+        { name: 'Civic Analytics', path: '/admin/analytics', icon: BarChart3 },
         { name: 'Manage Vault', path: '/admin/manage', icon: FileText },
         { name: 'Broadcast Node', path: '/admin/communication', icon: Megaphone },
     ];
 
-    const links = userInfo?.role === 'admin' ? adminLinks : citizenLinks;
+    const deptHeadLinks = [
+        { name: 'Dept Dashboard', path: '/department/dashboard', icon: LayoutDashboard },
+        { name: 'Department Queue', path: '/admin/manage', icon: FileText },
+    ];
+
+    const deptStaffLinks = [
+        { name: 'Staff Workspace', path: '/staff/dashboard', icon: LayoutDashboard },
+    ];
+
+    const isAdminRole = ['admin', 'super_admin', 'department_head', 'department_staff'].includes(userInfo?.role);
+    const links = isAdminRole ? adminLinks : citizenLinks;
 
     return (
         <>

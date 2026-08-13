@@ -1,0 +1,29 @@
+{
+  "name": "civicfix",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CivicFix — AI-Powered Multi-Department Civic Issue Reporting & Management Platform",
+  "scripts": {
+    "start": "npm --prefix server start",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "seed": "npm --prefix server run seed",
+    "test": "npm --prefix server run test",
+    "test:all": "npm --prefix server run test:all",
+    "test:unit": "npm --prefix server run test:unit",
+    "test:integration": "npm --prefix server run test:integration",
+    "test:security": "npm --prefix server run test:security"
+  },
+  "keywords": [
+    "civicfix",
+    "smartcity",
+    "react",
+    "express",
+    "mongodb",
+    "ai",
+    "gis"
+  ],
+  "author": "CivicFix Engineering Team",
+  "license": "ISC"
+}

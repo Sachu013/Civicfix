@@ -14,6 +14,8 @@ const register = asyncHandler(async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        departmentCode: user.departmentCode,
+        department: user.department,
         token: generateToken(user._id),
     });
 });
@@ -30,6 +32,8 @@ const login = asyncHandler(async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        departmentCode: user.departmentCode,
+        department: user.department,
         token: generateToken(user._id),
     });
 });
