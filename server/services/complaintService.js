@@ -1,5 +1,6 @@
 const Complaint = require('../models/Complaint');
 const ErrorResponse = require('../utils/errorResponse');
+const { findComplaintByIdOrCode } = require('../utils/idHelper');
 const geoService = require('./geoService');
 const uploadService = require('./uploadService');
 const imageSimilarityService = require('./imageSimilarityService');
@@ -211,11 +212,9 @@ const createComplaint = async ({
 
     const complaint = await Complaint.create(complaintData);
 
-    // Send assignment notification
-    notificationService.notifyAssignment({
-        complaint,
-        department: deptRouting.departmentDoc,
-    }).catch(() => {});
+    // Trigger Phase 7 notifications
+    await notificationService.notifyCitizenOnSubmission(complaint).catch((err) => console.error(err));
+    await notificationService.notifyOnDepartmentRouting(complaint).catch((err) => console.error(err));
 
     return complaint;
 };
@@ -230,16 +229,18 @@ const getUserComplaints = async (userId) => {
 };
 
 const trackComplaint = async (complaintId) => {
-    const complaint = await Complaint.findOne({ complaintId })
-        .populate('user', 'name email')
-        .populate('department', 'name code slaConfig contactInformation')
-        .populate('assignedTo', 'name email')
-        .populate('assignmentHistory.changedBy', 'name email')
-        .populate('statusHistory.changedBy', 'name email');
+    const { findComplaintByIdOrCode } = require('../utils/idHelper');
+    const complaint = await findComplaintByIdOrCode(complaintId);
 
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
+    await complaint.populate('user', 'name email');
+    await complaint.populate('department', 'name code slaConfig contactInformation');
+    await complaint.populate('assignedTo', 'name email');
+    await complaint.populate('assignmentHistory.changedBy', 'name email');
+    await complaint.populate('statusHistory.changedBy', 'name email');
+
     return updateLiveSLAAndEscalation(complaint);
 };
 
@@ -267,7 +268,7 @@ const getNearbyComplaints = async ({ latitude, longitude, radiusInMeters = 500 }
 };
 
 const supportComplaint = async (complaintId, userId) => {
-    const complaint = await Complaint.findOne({ complaintId });
+    const complaint = await findComplaintByIdOrCode(complaintId, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -281,7 +282,7 @@ const supportComplaint = async (complaintId, userId) => {
 };
 
 const verifyResolution = async (complaintId, userId, { verified, feedback }) => {
-    const complaint = await Complaint.findById(complaintId);
+    const complaint = await findComplaintByIdOrCode(complaintId, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -329,11 +330,12 @@ const verifyResolution = async (complaintId, userId, { verified, feedback }) => 
     }
 
     await complaint.save();
+    await notificationService.notifyOnCitizenResolutionVerification({ complaint, verified: Boolean(verified), feedback }).catch((err) => console.error(err));
     return complaint;
 };
 
 const reopenComplaint = async (complaintId, userId, reason) => {
-    const complaint = await Complaint.findById(complaintId);
+    const complaint = await findComplaintByIdOrCode(complaintId, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -357,6 +359,7 @@ const reopenComplaint = async (complaintId, userId, reason) => {
     });
 
     await complaint.save();
+    await notificationService.notifyOnCitizenResolutionVerification({ complaint, verified: false, feedback: reason }).catch((err) => console.error(err));
     return complaint;
 };
 
@@ -387,6 +390,10 @@ const updateLiveSLAAndEscalation = (complaint) => {
         } else if (liveSLAStatus === 'due_soon') {
             complaint.escalationLevel = 1;
         }
+    }
+
+    if (!isCompleted && (liveSLAStatus === 'due_soon' || liveSLAStatus === 'breached')) {
+        notificationService.notifyOnSLAEvent({ complaint, slaType: liveSLAStatus }).catch(() => {});
     }
 
     return complaint;

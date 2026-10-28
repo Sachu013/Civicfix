@@ -7,6 +7,15 @@ const path = require('path');
 
 const testFiles = [
     // Unit Tests
+    { category: 'Unit', name: 'Phase 2 Architecture & Roles', path: 'tests/unit/phase2Architecture.test.js' },
+    { category: 'Unit', name: 'Phase 3 Dept Head -> Verifier Workflow', path: 'tests/unit/phase3Assignment.test.js' },
+    { category: 'Unit', name: 'Phase 4 Verifier Investigation & Report Workflow', path: 'tests/unit/phase4Verification.test.js' },
+    { category: 'Unit', name: 'Phase 5 Dept Head Resolution & Citizen Confirmation', path: 'tests/unit/phase5Resolution.test.js' },
+    { category: 'Unit', name: 'Phase 6 Super Admin Monitoring & Analytics', path: 'tests/unit/phase6SuperAdmin.test.js' },
+    { category: 'Unit', name: 'Phase 7 Notification & Communication System', path: 'tests/unit/phase7Notifications.test.js' },
+    { category: 'Unit', name: 'Phase 8 Production Readiness & Hardening', path: 'tests/unit/phase8ProductionHardening.test.js' },
+    { category: 'Unit', name: 'Citizen OTP Auth & Phone Privacy', path: 'tests/unit/otpAuth.test.js' },
+    { category: 'Unit', name: 'Demo Citizen Bypass & Security', path: 'tests/unit/demoCitizenAuth.test.js' },
     { category: 'Unit', name: 'Classification System', path: 'tests/unit/classification.test.js' },
     { category: 'Unit', name: 'Duplicate Detection Engine', path: 'tests/unit/duplicateDetection.test.js' },
     { category: 'Unit', name: 'Semantic Vector Similarity', path: 'tests/unit/semanticDuplicates.test.js' },

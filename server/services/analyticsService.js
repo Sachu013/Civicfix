@@ -1,5 +1,6 @@
 const Complaint = require('../models/Complaint');
 const Department = require('../models/Department');
+const User = require('../models/User');
 const taxonomy = require('../config/complaintCategories');
 const { ANOMALY_STD_DEV_THRESHOLD } = require('../config/analyticsConfig');
 
@@ -65,7 +66,7 @@ const buildMatchQuery = (filters = {}) => {
 };
 
 /**
- * 1. Overview Metrics Engine
+ * 1. Overview Metrics Engine (Enhanced for Phase 6)
  */
 const getOverviewMetrics = async (filters = {}) => {
     const match = buildMatchQuery(filters);
@@ -121,13 +122,26 @@ const getOverviewMetrics = async (filters = {}) => {
 
     const total = data.totalCount[0]?.count || 0;
 
-    let open = 0;
+    let submitted = 0;
+    let verified = 0;
+    let assigned = 0;
+    let inProgress = 0;
     let resolved = 0;
     let closed = 0;
+    let reopened = 0;
+    let open = 0;
 
     (data.statusCounts || []).forEach((item) => {
-        if (item._id === 'Resolved') resolved += item.count;
-        else if (item._id === 'Closed') closed += item.count;
+        if (item._id === 'Submitted') submitted = item.count;
+        else if (item._id === 'Verified') verified = item.count;
+        else if (item._id === 'Assigned') assigned = item.count;
+        else if (item._id === 'In Progress') inProgress = item.count;
+        else if (item._id === 'Resolved') resolved = item.count;
+        else if (item._id === 'Closed') closed = item.count;
+        else if (item._id === 'Reopened') reopened = item.count;
+
+        if (item._id === 'Resolved') resolved = item.count;
+        else if (item._id === 'Closed') closed = item.count;
         else open += item.count;
     });
 
@@ -177,20 +191,46 @@ const getOverviewMetrics = async (filters = {}) => {
         medianResolutionTimeHours = Number(medianResolutionTimeHours.toFixed(1));
     }
 
+    // Active verifiers count
+    const activeVerifiers = await User.countDocuments({
+        role: { $in: ['verifier', 'department_staff'] },
+    });
+
+    // Reopen Rate & Citizen Confirmation Rate
+    const confirmationEvaluated = closed + reopened;
+    const citizenConfirmationRate = confirmationEvaluated > 0
+        ? Number(((closed / confirmationEvaluated) * 100).toFixed(1))
+        : 100;
+
+    const totalResolvedEver = resolved + closed + reopened;
+    const reopenRate = totalResolvedEver > 0
+        ? Number(((reopened / totalResolvedEver) * 100).toFixed(1))
+        : 0;
+
     return {
         total,
         open,
+        submitted,
+        verified,
+        assigned,
+        inProgress,
         resolved,
+        awaitingCitizenConfirmation: resolved,
         closed,
+        reopened,
+        unassigned,
         critical,
         highPriority: high,
         mediumPriority: medium,
         lowPriority: low,
-        unassigned,
         dueSoon,
         slaBreached: breached,
         escalated,
+        activeVerifiers,
+        totalDepartments: 6,
         resolutionRate,
+        citizenConfirmationRate,
+        reopenRate,
         slaComplianceRate,
         avgResolutionTimeHours,
         medianResolutionTimeHours,
@@ -271,7 +311,7 @@ const getSeverityPriorityAnalytics = async (filters = {}) => {
 };
 
 /**
- * 4. Department Performance Matrix
+ * 4. Department Performance & Workload Matrix (Enhanced for Phase 6)
  */
 const getDepartmentAnalytics = async (filters = {}) => {
     const match = buildMatchQuery(filters);
@@ -286,10 +326,36 @@ const getDepartmentAnalytics = async (filters = {}) => {
                 departmentName: { $first: '$assignedDepartment' },
                 totalAssigned: { $sum: 1 },
                 resolvedCount: {
-                    $sum: { $cond: [{ $in: ['$status', ['Resolved', 'Closed']] }, 1, 0] },
+                    $sum: { $cond: [{ $eq: ['$status', 'Resolved'] }, 1, 0] },
+                },
+                closedCount: {
+                    $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] },
+                },
+                reopenedCount: {
+                    $sum: { $cond: [{ $eq: ['$status', 'Reopened'] }, 1, 0] },
                 },
                 openCount: {
                     $sum: { $cond: [{ $in: ['$status', ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Reopened', 'Pending']] }, 1, 0] },
+                },
+                pendingAssignment: {
+                    $sum: {
+                        $cond: [
+                            {
+                                $or: [
+                                    { $in: ['$status', ['Submitted', 'Verified']] },
+                                    { $eq: ['$assignedTo', null] },
+                                ],
+                            },
+                            1,
+                            0,
+                        ],
+                    },
+                },
+                pendingVerification: {
+                    $sum: { $cond: [{ $eq: ['$status', 'Assigned'] }, 1, 0] },
+                },
+                pendingCitizenConfirmation: {
+                    $sum: { $cond: [{ $eq: ['$status', 'Resolved'] }, 1, 0] },
                 },
                 criticalCount: {
                     $sum: { $cond: [{ $eq: ['$priority', 'Critical'] }, 1, 0] },
@@ -315,17 +381,36 @@ const getDepartmentAnalytics = async (filters = {}) => {
         statsMap[d._id] = d;
     });
 
+    // Get verifiers per department
+    const verifiersByDept = await User.aggregate([
+        { $match: { role: { $in: ['verifier', 'department_staff'] } } },
+        { $group: { _id: '$departmentCode', count: { $sum: 1 } } },
+    ]);
+    const verifierCountMap = {};
+    verifiersByDept.forEach((v) => {
+        if (v._id) verifierCountMap[v._id.toUpperCase()] = v.count;
+    });
+
+    const totalGlobalActive = deptStats.reduce((acc, curr) => acc + (curr.openCount || 0), 0);
+
     const performanceMatrix = depts.map((d) => {
         const stats = statsMap[d.code] || {};
         const assigned = stats.totalAssigned || 0;
         const resolved = stats.resolvedCount || 0;
+        const closed = stats.closedCount || 0;
+        const reopened = stats.reopenedCount || 0;
         const open = stats.openCount || 0;
         const breached = stats.breachedCount || 0;
         const completedSla = stats.completedSlaCount || 0;
 
-        const resolutionRate = assigned > 0 ? Number(((resolved / assigned) * 100).toFixed(1)) : 0;
+        const totalCompleted = resolved + closed;
+        const resolutionRate = assigned > 0 ? Number(((totalCompleted / assigned) * 100).toFixed(1)) : 0;
         const slaEvaluated = completedSla + breached;
         const slaComplianceRate = slaEvaluated > 0 ? Number(((completedSla / slaEvaluated) * 100).toFixed(1)) : 100;
+
+        const verifierCount = verifierCountMap[d.code] || 0;
+        const verifierWorkload = verifierCount > 0 ? Number((open / verifierCount).toFixed(1)) : open;
+        const departmentWorkloadPercent = totalGlobalActive > 0 ? Number(((open / totalGlobalActive) * 100).toFixed(1)) : 0;
 
         return {
             departmentId: d._id,
@@ -333,13 +418,21 @@ const getDepartmentAnalytics = async (filters = {}) => {
             code: d.code,
             totalAssigned: assigned,
             resolvedCount: resolved,
+            closedCount: closed,
+            reopenedCount: reopened,
             openCount: open,
+            pendingAssignment: stats.pendingAssignment || 0,
+            pendingVerification: stats.pendingVerification || 0,
+            pendingCitizenConfirmation: stats.pendingCitizenConfirmation || 0,
             criticalCount: stats.criticalCount || 0,
             dueSoonCount: stats.dueSoonCount || 0,
             breachedCount: breached,
             escalatedCount: stats.escalatedCount || 0,
             resolutionRate,
             slaComplianceRate,
+            verifierCount,
+            verifierWorkload,
+            departmentWorkloadPercent,
         };
     });
 
@@ -410,6 +503,8 @@ const getTrendAnalytics = async (filters = {}, interval = 'daily') => {
                 _id: { $dateToString: { format: dateFormat, date: '$createdAt' } },
                 total: { $sum: 1 },
                 resolved: { $sum: { $cond: [{ $in: ['$status', ['Resolved', 'Closed']] }, 1, 0] } },
+                closed: { $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] } },
+                reopened: { $sum: { $cond: [{ $eq: ['$status', 'Reopened'] }, 1, 0] } },
                 critical: { $sum: { $cond: [{ $eq: ['$priority', 'Critical'] }, 1, 0] } },
             },
         },
@@ -479,6 +574,8 @@ const getTrendAnalytics = async (filters = {}, interval = 'daily') => {
             date: t._id,
             total: t.total,
             resolved: t.resolved,
+            closed: t.closed,
+            reopened: t.reopened,
             critical: t.critical,
         })),
         categorySpikes,
@@ -628,6 +725,237 @@ const getAnomalies = async (filters = {}) => {
     };
 };
 
+/**
+ * 10. Complaint Lifecycle Analytics (Phase 6)
+ */
+const getLifecycleAnalytics = async (filters = {}) => {
+    const match = buildMatchQuery(filters);
+
+    const stats = await Complaint.aggregate([
+        { $match: match },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]);
+
+    const counts = {
+        Submitted: 0,
+        Verified: 0,
+        Assigned: 0,
+        'In Progress': 0,
+        Resolved: 0,
+        'Citizen Verification': 0,
+        Closed: 0,
+        Reopened: 0,
+    };
+
+    stats.forEach((item) => {
+        if (item._id && counts[item._id] !== undefined) {
+            counts[item._id] = item.count;
+        }
+    });
+
+    // Stage accumulation pipeline visualization
+    const stages = [
+        { name: 'Submitted', count: counts.Submitted, description: 'Newly logged complaints awaiting processing' },
+        { name: 'Verified', count: counts.Verified, description: 'AI/Initial verified complaints' },
+        { name: 'Assigned', count: counts.Assigned, description: 'Assigned to field verifier / department' },
+        { name: 'In Progress', count: counts['In Progress'], description: 'Active field investigation / work in progress' },
+        { name: 'Resolved', count: counts.Resolved, description: 'Department resolved, awaiting citizen verification' },
+        { name: 'Citizen Verification', count: counts['Citizen Verification'] || counts.Resolved, description: 'Citizen review stage' },
+        { name: 'Closed', count: counts.Closed, description: 'Confirmed by citizen and closed' },
+        { name: 'Reopened', count: counts.Reopened, description: 'Rejected by citizen, returned to workflow' },
+    ];
+
+    // Find bottleneck stage among open complaints
+    let bottleneckStage = 'None';
+    let maxOpen = 0;
+
+    ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Reopened'].forEach((s) => {
+        if (counts[s] > maxOpen) {
+            maxOpen = counts[s];
+            bottleneckStage = s;
+        }
+    });
+
+    return {
+        counts,
+        stages,
+        bottleneckStage,
+        maxAccumulation: maxOpen,
+    };
+};
+
+/**
+ * 11. Reopen & Citizen Confirmation Analytics (Phase 6)
+ */
+const getReopenAnalytics = async (filters = {}) => {
+    const match = buildMatchQuery(filters);
+
+    const totalResolved = await Complaint.countDocuments({ ...match, status: { $in: ['Resolved', 'Closed', 'Reopened'] } });
+    const awaitingCitizenConfirmation = await Complaint.countDocuments({ ...match, status: 'Resolved' });
+    const confirmedByCitizen = await Complaint.countDocuments({ ...match, status: 'Closed' });
+    const rejectedByCitizen = await Complaint.countDocuments({ ...match, status: 'Reopened' });
+    const reopenedCount = await Complaint.countDocuments({ ...match, $or: [{ status: 'Reopened' }, { reopenCount: { $gt: 0 } }] });
+
+    const multipleReopenCycles = await Complaint.countDocuments({ ...match, reopenCount: { $gt: 1 } });
+
+    const reopenRate = totalResolved > 0 ? Number(((reopenedCount / totalResolved) * 100).toFixed(1)) : 0;
+
+    const avgReopenStats = await Complaint.aggregate([
+        { $match: { ...match, reopenCount: { $gt: 0 } } },
+        { $group: { _id: null, avgCount: { $avg: '$reopenCount' } } },
+    ]);
+    const avgReopenCount = avgReopenStats[0]?.avgCount ? Number(avgReopenStats[0].avgCount.toFixed(1)) : 0;
+
+    const topReopened = await Complaint.find({ ...match, reopenCount: { $gt: 0 } })
+        .select('complaintId title category departmentCode status reopenCount citizenVerification createdAt')
+        .sort({ reopenCount: -1 })
+        .limit(10);
+
+    return {
+        totalResolved,
+        awaitingCitizenConfirmation,
+        confirmedByCitizen,
+        rejectedByCitizen,
+        reopenedCount,
+        reopenRate,
+        multipleReopenCycles,
+        avgReopenCount,
+        topReopenedComplaints: topReopened,
+    };
+};
+
+/**
+ * 12. Verifier / Field Operations Monitoring (Phase 6)
+ */
+const getVerifierAnalytics = async (filters = {}) => {
+    const match = buildMatchQuery(filters);
+
+    const verifiers = await User.find({
+        role: { $in: ['verifier', 'department_staff'] },
+    }).select('name email role departmentCode');
+
+    const verifierIds = verifiers.map((v) => v._id);
+
+    // Assigned active complaints per verifier
+    const activeWorkload = await Complaint.aggregate([
+        {
+            $match: {
+                ...match,
+                assignedTo: { $in: verifierIds },
+                status: { $in: ['Assigned', 'In Progress'] },
+            },
+        },
+        { $group: { _id: '$assignedTo', count: { $sum: 1 } } },
+    ]);
+
+    const activeWorkloadMap = {};
+    activeWorkload.forEach((w) => {
+        activeWorkloadMap[w._id.toString()] = w.count;
+    });
+
+    // Verification reports submitted count
+    const reportsSubmittedStats = await Complaint.aggregate([
+        {
+            $match: {
+                ...match,
+                'verificationReport.submittedAt': { $exists: true },
+            },
+        },
+        { $group: { _id: '$verificationReport.verifier', count: { $sum: 1 } } },
+    ]);
+
+    const reportsSubmittedMap = {};
+    reportsSubmittedStats.forEach((r) => {
+        if (r._id) reportsSubmittedMap[r._id.toString()] = r.count;
+    });
+
+    // Verification outcomes breakdown
+    const outcomesStats = await Complaint.aggregate([
+        { $match: { ...match, 'verificationReport.outcome': { $exists: true } } },
+        { $group: { _id: '$verificationReport.outcome', count: { $sum: 1 } } },
+    ]);
+
+    const outcomesBreakdown = {};
+    outcomesStats.forEach((o) => {
+        if (o._id) outcomesBreakdown[o._id] = o.count;
+    });
+
+    const unassignedComplaints = await Complaint.countDocuments({
+        ...match,
+        $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }],
+        status: { $in: ['Submitted', 'Verified', 'Assigned'] },
+    });
+
+    const awaitingFieldVerification = await Complaint.countDocuments({
+        ...match,
+        status: 'Assigned',
+        'verificationReport.submittedAt': { $exists: false },
+    });
+
+    const verifierList = verifiers.map((v) => {
+        const idStr = v._id.toString();
+        return {
+            _id: v._id,
+            name: v.name,
+            email: v.email,
+            departmentCode: v.departmentCode,
+            assignedActiveCount: activeWorkloadMap[idStr] || 0,
+            reportsSubmittedCount: reportsSubmittedMap[idStr] || 0,
+        };
+    });
+
+    return {
+        totalActiveVerifiers: verifiers.length,
+        unassignedComplaints,
+        awaitingFieldVerification,
+        verificationReportsSubmitted: reportsSubmittedStats.reduce((a, b) => a + b.count, 0),
+        outcomesBreakdown,
+        verifiers: verifierList,
+    };
+};
+
+/**
+ * 13. Time / SLA / Ageing Analytics (Phase 6)
+ */
+const getAgeingAnalytics = async (filters = {}) => {
+    const match = buildMatchQuery(filters);
+    const now = new Date();
+
+    const openMatch = {
+        ...match,
+        status: { $in: ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Reopened'] },
+    };
+
+    const lessThan24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const oneToThreeDays = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const threeToSevenDays = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const count24h = await Complaint.countDocuments({ ...openMatch, createdAt: { $gte: lessThan24h } });
+    const count1to3d = await Complaint.countDocuments({ ...openMatch, createdAt: { $gte: oneToThreeDays, $lt: lessThan24h } });
+    const count3to7d = await Complaint.countDocuments({ ...openMatch, createdAt: { $gte: threeToSevenDays, $lt: oneToThreeDays } });
+    const countMore7d = await Complaint.countDocuments({ ...openMatch, createdAt: { $lt: threeToSevenDays } });
+
+    const longestPending = await Complaint.find(openMatch)
+        .select('complaintId title category departmentCode status priority createdAt sla')
+        .sort({ createdAt: 1 })
+        .limit(10);
+
+    const slaAtRisk = await Complaint.countDocuments({ ...openMatch, 'sla.status': 'due_soon' });
+    const slaBreached = await Complaint.countDocuments({ ...openMatch, 'sla.status': 'breached' });
+
+    return {
+        ageingBuckets: {
+            under24Hours: count24h,
+            oneToThreeDays: count1to3d,
+            threeToSevenDays: count3to7d,
+            overSevenDays: countMore7d,
+        },
+        slaAtRisk,
+        slaBreached,
+        longestPendingComplaints: longestPending,
+    };
+};
+
 module.exports = {
     buildMatchQuery,
     getOverviewMetrics,
@@ -639,4 +967,8 @@ module.exports = {
     getGeospatialAnalytics,
     getRegionalAnalytics,
     getAnomalies,
+    getLifecycleAnalytics,
+    getReopenAnalytics,
+    getVerifierAnalytics,
+    getAgeingAnalytics,
 };

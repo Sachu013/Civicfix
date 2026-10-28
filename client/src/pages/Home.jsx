@@ -196,6 +196,26 @@ const Home = () => {
                     </div>
 
                     <div className="space-y-4 flex-1">
+                        {/* Action Required: Pending Resolution Confirmation Banner */}
+                        {complaints.filter(c => c.status === 'Resolved' || c.status === 'Citizen Verification').map(pendingComp => (
+                            <div key={pendingComp._id} className="p-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2.5 py-0.5 bg-white/20 rounded-md font-mono text-[10px] font-black uppercase">Action Required</span>
+                                        <span className="text-xs font-bold text-emerald-100">#{pendingComp.complaintId}</span>
+                                    </div>
+                                    <h4 className="font-black text-sm text-white">{pendingComp.title}</h4>
+                                    <p className="text-xs text-emerald-100 font-medium">Department has marked this issue as resolved. Please confirm whether it is fixed.</p>
+                                </div>
+                                <Link
+                                    to={`/track?id=${pendingComp.complaintId}`}
+                                    className="px-4 py-2 bg-white text-teal-800 hover:bg-emerald-50 rounded-xl font-extrabold text-xs uppercase tracking-wider shrink-0 transition-all shadow-md"
+                                >
+                                    Review & Confirm Resolution
+                                </Link>
+                            </div>
+                        ))}
+
                         {loading ? (
                             [1, 2, 3].map(i => (
                                 <div key={i} className="h-24 bg-slate-50 rounded-3xl shimmer"></div>

@@ -19,6 +19,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import api from '../api';
+import { getCanonicalId } from '../utils/idUtils';
 
 const TrackComplaint = () => {
     const [searchParams] = useSearchParams();
@@ -60,13 +61,18 @@ const TrackComplaint = () => {
 
     const handleVerifyResolution = async (verified) => {
         if (!complaint) return;
+        const cleanId = getCanonicalId(complaint) || (typeof complaint._id === 'string' ? complaint._id : complaint.complaintId);
+        if (!cleanId) {
+            alert('Cannot submit verification response: Missing or invalid complaint ID.');
+            return;
+        }
         setVerifying(true);
         try {
-            const { data } = await api.post(`/complaints/${complaint._id}/verify-resolution`, {
+            const { data } = await api.post(`/complaints/${cleanId}/verify-resolution`, {
                 verified,
                 feedback,
             });
-            setComplaint(data);
+            setComplaint(data.complaint || data);
             setVerificationSubmitted(true);
             alert(verified ? 'Thank you! Issue resolution confirmed.' : 'Issue marked as unresolved and reopened for response team.');
         } catch (err) {

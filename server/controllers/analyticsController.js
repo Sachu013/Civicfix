@@ -81,6 +81,34 @@ const getInsights = asyncHandler(async (req, res) => {
     res.json(data);
 });
 
+// @desc    Get complaint lifecycle accumulation analytics (Phase 6)
+// @route   GET /api/admin/analytics/lifecycle
+const getLifecycle = asyncHandler(async (req, res) => {
+    const data = await analyticsService.getLifecycleAnalytics(req.query);
+    res.json(data);
+});
+
+// @desc    Get reopen & citizen confirmation analytics (Phase 6)
+// @route   GET /api/admin/analytics/reopen
+const getReopen = asyncHandler(async (req, res) => {
+    const data = await analyticsService.getReopenAnalytics(req.query);
+    res.json(data);
+});
+
+// @desc    Get verifier / field operations monitoring (Phase 6)
+// @route   GET /api/admin/analytics/verifiers
+const getVerifiers = asyncHandler(async (req, res) => {
+    const data = await analyticsService.getVerifierAnalytics(req.query);
+    res.json(data);
+});
+
+// @desc    Get time / SLA / ageing analytics (Phase 6)
+// @route   GET /api/admin/analytics/ageing
+const getAgeing = asyncHandler(async (req, res) => {
+    const data = await analyticsService.getAgeingAnalytics(req.query);
+    res.json(data);
+});
+
 module.exports = {
     getOverview,
     getCategories,
@@ -93,4 +121,8 @@ module.exports = {
     getRegional,
     getAnomalies,
     getInsights,
+    getLifecycle,
+    getReopen,
+    getVerifiers,
+    getAgeing,
 };

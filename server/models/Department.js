@@ -18,6 +18,11 @@ const departmentSchema = mongoose.Schema(
             type: String,
             default: '',
         },
+        responsibilities: [
+            {
+                type: String,
+            },
+        ],
         categories: [
             {
                 type: String,
@@ -28,6 +33,14 @@ const departmentSchema = mongoose.Schema(
                 type: String,
             },
         ],
+        headRole: {
+            type: String,
+            default: 'department_head',
+        },
+        verifierRole: {
+            type: String,
+            default: 'verifier',
+        },
         active: {
             type: Boolean,
             default: true,

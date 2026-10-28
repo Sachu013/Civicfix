@@ -12,6 +12,9 @@ const protect = async (req, res, next) => {
             token = req.headers.authorization.split(' ')[1];
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             req.user = await User.findById(decoded.id).select('-password');
+            if (!req.user) {
+                return res.status(401).json({ message: 'Not authorized, user not found' });
+            }
             return next();
         } catch (error) {
             return res.status(401).json({ message: 'Not authorized, token invalid or expired' });
@@ -26,11 +29,16 @@ const protect = async (req, res, next) => {
 const admin = (req, res, next) => {
     if (
         req.user &&
-        ['admin', 'super_admin', 'department_head', 'department_staff'].includes(req.user.role)
+        ['admin', 'super_admin', 'department_head', 'verifier', 'department_staff'].includes(req.user.role)
     ) {
         return next();
     }
     return res.status(401).json({ message: 'Not authorized as an admin' });
 };
 
-module.exports = { protect, admin };
+module.exports = {
+    protect,
+    admin,
+    requireAuth: protect,
+};
+

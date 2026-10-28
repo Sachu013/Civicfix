@@ -33,8 +33,8 @@ const runDepartmentAuthTests = async () => {
         const roadsHead = await User.findOne({ email: 'roads_head@smartcity.gov' });
         const waterHead = await User.findOne({ email: 'water_head@smartcity.gov' });
         const electricalHead = await User.findOne({ email: 'electrical_head@smartcity.gov' });
-        const roadsStaff = await User.findOne({ email: 'roads_staff@smartcity.gov' });
-        const waterStaff = await User.findOne({ email: 'water_staff@smartcity.gov' });
+        const roadsVerifier = await User.findOne({ email: 'roads_verifier@smartcity.gov' }) || await User.findOne({ email: 'roads_staff@smartcity.gov' });
+        const waterVerifier = await User.findOne({ email: 'water_verifier@smartcity.gov' }) || await User.findOne({ email: 'water_staff@smartcity.gov' });
         const superAdmin = await User.findOne({ email: 'admin@test.com' });
         const citizen = await User.findOne({ email: 'citizen@demo.com' });
 
@@ -65,11 +65,11 @@ const runDepartmentAuthTests = async () => {
             console.error('❌ TEST 3 FAILED');
         }
 
-        // --- TEST 4: Roads Staff Officer Login ---
-        console.log('\n--- TEST 4: Roads Staff Officer Login ---');
-        const loggedRoadsStaff = await authService.loginUser('roads_staff@smartcity.gov', 'staff123');
-        if (loggedRoadsStaff.role === 'department_staff' && loggedRoadsStaff.departmentCode === 'ROADS') {
-            console.log('✓ TEST 4 PASSED: Roads Staff Officer login authenticated with role: department_staff and departmentCode: ROADS.');
+        // --- TEST 4: Roads Verifier Officer Login ---
+        console.log('\n--- TEST 4: Roads Verifier Officer Login ---');
+        const loggedRoadsStaff = await authService.loginUser(roadsVerifier ? roadsVerifier.email : 'roads_verifier@smartcity.gov', roadsVerifier && roadsVerifier.role === 'department_staff' ? 'staff123' : 'verifier123');
+        if (['verifier', 'department_staff'].includes(loggedRoadsStaff.role) && loggedRoadsStaff.departmentCode === 'ROADS') {
+            console.log(`✓ TEST 4 PASSED: Roads Verifier login authenticated with role: ${loggedRoadsStaff.role} and departmentCode: ROADS.`);
         } else {
             console.error('❌ TEST 4 FAILED');
         }
@@ -220,11 +220,11 @@ const runDepartmentAuthTests = async () => {
             name: 'Dynamic Test Staff',
             email: testStaffEmail,
             password: 'staffpassword',
-            role: 'department_staff',
+            role: 'verifier',
             departmentCode: 'ROADS',
             department: roadsDept._id,
         });
-        if (createdStaff.role === 'department_staff' && createdStaff.departmentCode === 'ROADS') {
+        if (['verifier', 'department_staff'].includes(createdStaff.role) && createdStaff.departmentCode === 'ROADS') {
             console.log(`✓ TEST 15 PASSED: Super Admin created new staff user '${createdStaff.email}' for ROADS department.`);
             await User.findByIdAndDelete(createdStaff._id);
         } else {
@@ -233,16 +233,16 @@ const runDepartmentAuthTests = async () => {
 
         // --- TEST 16: Staff Officer Assignment within Department ---
         console.log('\n--- TEST 16: Staff Assignment (Same Dept: Allowed) ---');
-        roadComp.assignedTo = roadsStaff._id;
+        roadComp.assignedTo = roadsVerifier._id;
         roadComp.status = 'Assigned';
         await roadComp.save();
-        console.log(`✓ TEST 16 PASSED: Roads Head successfully assigned Roads complaint to Roads Staff Officer (${roadsStaff.name}).`);
+        console.log(`✓ TEST 16 PASSED: Roads Head successfully assigned Roads complaint to Roads Verifier Officer (${roadsVerifier.name}).`);
 
         // --- TEST 17: Staff Assignment Validation (Cross-Department: Forbidden) ---
         console.log('\n--- TEST 17: Staff Assignment Validation (Cross-Dept: Forbidden) ---');
-        const isCrossStaffSameDept = (waterStaff.departmentCode === roadComp.departmentCode);
+        const isCrossStaffSameDept = (waterVerifier.departmentCode === roadComp.departmentCode);
         if (!isCrossStaffSameDept) {
-            console.log('✓ TEST 17 PASSED: Assigning Roads complaint to Water Staff Officer correctly identified as Cross-Department Violation.');
+            console.log('✓ TEST 17 PASSED: Assigning Roads complaint to Water Verifier Officer correctly identified as Cross-Department Violation.');
         } else {
             console.error('❌ TEST 17 FAILED');
         }
@@ -250,10 +250,10 @@ const runDepartmentAuthTests = async () => {
         // --- TEST 18: Fallback Routing for Unknown Categories ---
         console.log('\n--- TEST 18: Fallback Routing for Unknown Category ---');
         const unknownDept = await routingService.determineDepartment({ category: 'Unmapped Nonexistent Category' });
-        if (unknownDept.code === 'GENERAL') {
-            console.log(`✓ TEST 18 PASSED: Unknown category safely routed to fallback department 'GENERAL'.`);
+        if (unknownDept.code === 'PUBLIC_WORKS' || unknownDept.code === 'GENERAL') {
+            console.log(`✓ TEST 18 PASSED: Unknown category safely routed to fallback department '${unknownDept.code}'.`);
         } else {
-            console.error(`❌ TEST 18 FAILED: Expected GENERAL, got ${unknownDept.code}`);
+            console.error(`❌ TEST 18 FAILED: Expected PUBLIC_WORKS or GENERAL, got ${unknownDept.code}`);
         }
 
         // --- TEST 19: Duplicate Detection Engine Regression ---

@@ -27,14 +27,14 @@ const complaintSchema = mongoose.Schema(
             default: 'Medium',
         },
 
-        // Department & Assignment Architecture (Sprint 7)
+        // Department & Assignment Architecture (Phase 3)
         department: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Department',
         },
         departmentCode: {
             type: String,
-            default: 'GENERAL',
+            default: 'PUBLIC_WORKS',
         },
         assignedDepartment: {
             type: String, // String representation for backward compatibility
@@ -52,11 +52,15 @@ const complaintSchema = mongoose.Schema(
         },
         assignmentSource: {
             type: String,
-            enum: ['automatic', 'admin', 'escalation', 'reassignment'],
+            enum: ['automatic', 'admin', 'escalation', 'reassignment', 'department_head', 'unassigned'],
             default: 'automatic',
         },
         assignmentHistory: [
             {
+                verifier: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                assignedAt: { type: Date, default: Date.now },
+                action: { type: String, enum: ['assigned', 'reassigned', 'unassigned'] },
                 previousDepartmentCode: String,
                 newDepartmentCode: String,
                 previousDepartmentName: String,
@@ -66,6 +70,51 @@ const complaintSchema = mongoose.Schema(
                 changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
                 reason: String,
                 assignmentSource: String,
+                timestamp: { type: Date, default: Date.now },
+            },
+        ],
+        // Phase 4: Field Verifier Investigation & Verification Report
+        verificationState: {
+            type: String,
+            enum: ['UNVERIFIED', 'AWAITING_REVIEW', 'VERIFIED_CONFIRMED', 'VERIFIED_NOT_FOUND', 'VERIFIED_RESOLVED', 'VERIFIED_INSUFFICIENT'],
+            default: 'UNVERIFIED',
+        },
+        verificationReport: {
+            verifier: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+            },
+            submittedAt: { type: Date },
+            findings: { type: String },
+            outcome: {
+                type: String,
+                enum: ['VERIFIED_CONFIRMED', 'VERIFIED_NOT_FOUND', 'VERIFIED_RESOLVED', 'VERIFIED_INSUFFICIENT', 'ISSUE_CONFIRMED', 'ISSUE_NOT_FOUND', 'ISSUE_ALREADY_RESOLVED', 'INSUFFICIENT_EVIDENCE', 'NEEDS_FURTHER_INSPECTION'],
+            },
+            contactWithCitizen: { type: Boolean, default: false },
+            citizenContactNotes: { type: String, default: '' },
+            locationVerified: { type: Boolean, default: false },
+            status: { type: String, enum: ['draft', 'submitted'], default: 'submitted' },
+            evidence: [
+                {
+                    url: { type: String, required: true },
+                    publicId: { type: String },
+                    originalName: { type: String },
+                    mimeType: { type: String },
+                    size: { type: Number },
+                    uploadedAt: { type: Date, default: Date.now },
+                },
+            ],
+        },
+        verificationHistory: [
+            {
+                verifier: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                action: { type: String, required: true },
+                outcome: { type: String, required: true },
+                findings: { type: String },
+                evidenceCount: { type: Number, default: 0 },
+                contactWithCitizen: { type: Boolean },
+                citizenContactNotes: { type: String },
+                locationVerified: { type: Boolean },
                 timestamp: { type: Date, default: Date.now },
             },
         ],
@@ -238,13 +287,29 @@ const complaintSchema = mongoose.Schema(
             default: undefined,
         },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true },
+    }
 );
 
-// Pre-save hook to ensure 2dsphere index compatibility for text-only complaints
+complaintSchema.virtual('assignedVerifier')
+    .get(function () {
+        return this.assignedTo;
+    })
+    .set(function (val) {
+        this.assignedTo = val;
+    });
+
+// Pre-save hook to ensure 2dsphere index compatibility and departmentCode normalization
 complaintSchema.pre('save', function () {
     if (!this.locationPoint || !Array.isArray(this.locationPoint.coordinates) || this.locationPoint.coordinates.length < 2) {
         this.locationPoint = undefined;
+    }
+    if (this.departmentCode) {
+        const { normalizeDepartmentCode } = require('../config/departmentConfig');
+        this.departmentCode = normalizeDepartmentCode(this.departmentCode);
     }
 });
 

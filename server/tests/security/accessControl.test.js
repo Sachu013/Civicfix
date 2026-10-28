@@ -30,8 +30,24 @@ const runAccessControlTests = async () => {
         const roadsHead = await User.findOne({ email: 'roads_head@smartcity.gov' });
         const waterHead = await User.findOne({ email: 'water_head@smartcity.gov' });
         const wasteHead = await User.findOne({ email: 'waste_head@smartcity.gov' });
-        const roadsStaff = await User.findOne({ email: 'roads_staff@smartcity.gov' });
+        const roadsStaff = await User.findOne({ email: 'roads_verifier@smartcity.gov' }) || await User.findOne({ email: 'roads_staff@smartcity.gov' });
         const superAdmin = await User.findOne({ email: 'admin@test.com' });
+
+        // --- TEST 0: Public Citizen Registration Privilege Escalation Fix ---
+        console.log('--- TEST 0: Public Citizen Registration Privilege Escalation Fix ---');
+        const regUser = await authService.registerUser({
+            name: 'Malicious User',
+            email: `test_reg_sec_${Date.now()}@test.com`,
+            password: 'password123',
+            role: 'super_admin',
+            departmentCode: 'ROADS'
+        });
+        if (regUser.role === 'citizen' && !regUser.departmentCode) {
+            console.log('✓ TEST 0 PASSED: Public registration strictly forced role = citizen and stripped departmentCode.');
+            await User.findByIdAndDelete(regUser._id);
+        } else {
+            console.error('❌ TEST 0 FAILED: Registration accepted unauthorized privilege escalation.');
+        }
 
         // Create test complaint owned by Citizen for Roads department
         const testRoadComp = await Complaint.create({
@@ -43,7 +59,7 @@ const runAccessControlTests = async () => {
             subcategory: 'Pothole',
             departmentCode: 'ROADS',
             department: roadsDept._id,
-            assignedDepartment: 'Roads & Transportation Department',
+            assignedDepartment: 'Roads & Transportation',
             location: 'Sector 5, SmartCity',
             status: 'Submitted',
             severity: 'Medium',
@@ -64,9 +80,9 @@ const runAccessControlTests = async () => {
             description: 'Security & priority test complaint for Water department',
             category: 'Water Leakage',
             subcategory: 'Pipe Burst',
-            departmentCode: 'WATER',
+            departmentCode: 'WATER_DRAINAGE',
             department: waterDept._id,
-            assignedDepartment: 'Water Supply Department',
+            assignedDepartment: 'Water & Drainage',
             location: 'Sector 8, SmartCity',
             status: 'Submitted',
             severity: 'High',
@@ -95,7 +111,7 @@ const runAccessControlTests = async () => {
 
         // --- TEST 3: Citizen Forbidden from Admin Insights ---
         console.log('\n--- TEST 3: Citizen Forbidden from Admin Insights ---');
-        const isCitizenAdminRole = ['admin', 'super_admin', 'department_head', 'department_staff'].includes(citizen.role);
+        const isCitizenAdminRole = ['admin', 'super_admin', 'department_head', 'verifier', 'department_staff'].includes(citizen.role);
         if (!isCitizenAdminRole) {
             console.log(`✓ TEST 3 PASSED: Citizen role '${citizen.role}' rejected from accessing Admin Insights.`);
         } else {

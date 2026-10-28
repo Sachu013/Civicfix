@@ -12,13 +12,17 @@ const {
     getRegional,
     getAnomalies,
     getInsights,
+    getLifecycle,
+    getReopen,
+    getVerifiers,
+    getAgeing,
 } = require('../controllers/analyticsController');
 const { protect } = require('../middleware/authMiddleware');
 const { requireRoles, enforceDepartmentScope } = require('../middleware/roleMiddleware');
 
 const adminOrDeptAuth = [
     protect,
-    requireRoles('super_admin', 'admin', 'department_head', 'department_staff'),
+    requireRoles('super_admin', 'admin', 'department_head', 'verifier', 'department_staff'),
     enforceDepartmentScope,
 ];
 
@@ -41,5 +45,9 @@ router.get('/hotspots', adminOrDeptAuth, getHotspots);
 router.get('/regional', adminOrDeptAuth, getRegional);
 router.get('/anomalies', adminOrDeptAuth, getAnomalies);
 router.get('/insights', adminOrDeptAuth, getInsights);
+router.get('/lifecycle', adminOrDeptAuth, getLifecycle);
+router.get('/reopen', adminOrDeptAuth, getReopen);
+router.get('/verifiers', adminOrDeptAuth, getVerifiers);
+router.get('/ageing', adminOrDeptAuth, getAgeing);
 
 module.exports = router;

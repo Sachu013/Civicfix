@@ -34,7 +34,7 @@ const SubmitComplaint = () => {
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        category: 'Roads & Transportation',
+        category: 'Roads & Infrastructure',
         subcategory: 'Pothole',
         location: '',
         imageUrl: ''
@@ -476,18 +476,21 @@ const SubmitComplaint = () => {
                         <p className="text-xs text-slate-400 italic">No existing complaints detected within 500 meters of this location.</p>
                     ) : (
                         <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                            {nearbyComplaints.slice(0, 5).map((item) => (
-                                <div key={item._id || item.complaintId} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase">{item.category}</span>
-                                        <span className={`text-[10px] font-extrabold ${item.status === 'Resolved' ? 'text-emerald-600' : item.status === 'In Progress' ? 'text-blue-600' : 'text-amber-600'}`}>
-                                            {item.status}
-                                        </span>
+                            {nearbyComplaints.slice(0, 5).map((item, idx) => {
+                                const key = typeof item._id === 'string' ? item._id : item.complaintId || `nearby-${idx}`;
+                                return (
+                                    <div key={key} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase">{item.category}</span>
+                                            <span className={`text-[10px] font-extrabold ${item.status === 'Resolved' ? 'text-emerald-600' : item.status === 'In Progress' ? 'text-blue-600' : 'text-amber-600'}`}>
+                                                {item.status}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs font-bold text-slate-800 truncate">{item.title}</p>
+                                        <p className="text-[11px] text-slate-400 truncate">{item.formattedAddress || item.location}</p>
                                     </div>
-                                    <p className="text-xs font-bold text-slate-800 truncate">{item.title}</p>
-                                    <p className="text-[11px] text-slate-400 truncate">{item.formattedAddress || item.location}</p>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

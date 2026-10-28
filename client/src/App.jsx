@@ -13,10 +13,12 @@ import ComplaintDetails from './pages/ComplaintDetails';
 import Profile from './pages/Profile';
 import AdminCommunication from './pages/AdminCommunication';
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 const App = () => {
   const { userInfo } = useAuth();
   const role = userInfo?.role;
-  const isAdminRole = ['admin', 'super_admin', 'department_head', 'department_staff'].includes(role);
+  const isAdminRole = ['admin', 'super_admin', 'department_head', 'verifier', 'department_staff'].includes(role);
 
   return (
     <Routes>
@@ -26,12 +28,23 @@ const App = () => {
       <Route element={userInfo ? <Layout /> : <Navigate to="/login" />}>
         {isAdminRole ? (
           <>
-            <Route path="/admin-dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/analytics" element={<AdminAnalytics />} />
-            <Route path="/admin/manage" element={<ManageComplaints />} />
-            <Route path="/admin/complaint/:id" element={<ComplaintDetails />} />
-            <Route path="/admin/communication" element={<AdminCommunication />} />
-            <Route path="*" element={<Navigate to="/admin-dashboard" />} />
+            <Route path="/admin-dashboard" element={<ErrorBoundary title="Admin Dashboard Error"><AdminDashboard /></ErrorBoundary>} />
+            <Route path="/department/dashboard" element={<ErrorBoundary title="Department Dashboard Error"><AdminDashboard /></ErrorBoundary>} />
+            <Route path="/staff/dashboard" element={<ErrorBoundary title="Staff Queue Error"><ManageComplaints /></ErrorBoundary>} />
+            <Route path="/admin/analytics" element={<ErrorBoundary title="Civic Analytics Error"><AdminAnalytics /></ErrorBoundary>} />
+            <Route path="/admin/manage" element={<ErrorBoundary title="Incident Vault Error"><ManageComplaints /></ErrorBoundary>} />
+            <Route path="/admin/complaint/:id" element={<ErrorBoundary title="Detailed Analysis Error"><ComplaintDetails /></ErrorBoundary>} />
+            <Route path="/admin/communication" element={<ErrorBoundary title="Broadcast Communication Error"><AdminCommunication /></ErrorBoundary>} />
+            <Route
+              path="*"
+              element={
+                ['verifier', 'department_staff'].includes(role) ? (
+                  <Navigate to="/admin/manage" replace />
+                ) : (
+                  <Navigate to="/admin-dashboard" replace />
+                )
+              }
+            />
           </>
         ) : (
           <>

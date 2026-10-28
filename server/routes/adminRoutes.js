@@ -22,7 +22,7 @@ const { uploadSingleImage } = require('../middleware/uploadMiddleware');
 
 const adminOrDeptAuth = [
     protect,
-    requireRoles('super_admin', 'admin', 'department_head', 'department_staff'),
+    requireRoles('super_admin', 'admin', 'department_head', 'verifier', 'department_staff'),
 ];
 
 const superAdminOnly = [

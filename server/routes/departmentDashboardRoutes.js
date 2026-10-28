@@ -15,7 +15,13 @@ const { requireRoles, enforceDepartmentScope } = require('../middleware/roleMidd
 
 const departmentAuth = [
     protect,
-    requireRoles('department_head', 'department_staff', 'super_admin', 'admin'),
+    requireRoles('department_head', 'verifier', 'department_staff', 'super_admin', 'admin'),
+    enforceDepartmentScope,
+];
+
+const deptHeadOnly = [
+    protect,
+    requireRoles('department_head'),
     enforceDepartmentScope,
 ];
 
@@ -26,6 +32,6 @@ router.get('/hotspots', departmentAuth, getDepartmentHotspots);
 router.get('/sla', departmentAuth, getDepartmentSLA);
 router.get('/escalations', departmentAuth, getDepartmentEscalations);
 router.get('/staff', departmentAuth, getDepartmentStaff);
-router.post('/assign', departmentAuth, assignComplaintToStaff);
+router.post('/assign', deptHeadOnly, assignComplaintToStaff);
 
 module.exports = router;

@@ -35,11 +35,75 @@ import {
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
+export const getCanonicalUserId = (val) => {
+    if (!val) return '';
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '[object Object]' || trimmed === 'null' || trimmed === 'undefined') return '';
+        return trimmed;
+    }
+    if (typeof val === 'number') return String(val);
+
+    if (typeof val === 'object' && val !== null) {
+        if (val.buffer && Array.isArray(val.buffer.data)) {
+            return val.buffer.data.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        if (val.data && Array.isArray(val.data)) {
+            return val.data.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        if (val.$oid) return String(val.$oid).trim();
+
+        const rawId = val._id || val.id;
+        if (rawId) {
+            if (typeof rawId === 'string' && rawId !== '[object Object]' && rawId !== 'null' && rawId !== 'undefined') {
+                return rawId.trim();
+            }
+            if (typeof rawId === 'object' && rawId !== null) {
+                if (rawId.buffer && Array.isArray(rawId.buffer.data)) {
+                    return rawId.buffer.data.map(b => b.toString(16).padStart(2, '0')).join('');
+                }
+                if (rawId.data && Array.isArray(rawId.data)) {
+                    return rawId.data.map(b => b.toString(16).padStart(2, '0')).join('');
+                }
+                if (rawId.$oid) return String(rawId.$oid).trim();
+                const inner = getCanonicalUserId(rawId);
+                if (inner) return inner;
+            }
+            if (typeof rawId.toString === 'function') {
+                const str = rawId.toString();
+                if (str && str !== '[object Object]' && str !== '[object Promise]') {
+                    return str.trim();
+                }
+            }
+        }
+
+        if (typeof val.toString === 'function') {
+            const str = val.toString();
+            if (str && str !== '[object Object]' && str !== '[object Promise]') {
+                return str.trim();
+            }
+        }
+    }
+    return '';
+};
+
+export const normalizeDeptCode = (code) => {
+    if (!code) return '';
+    const upper = String(code).trim().toUpperCase();
+    if (upper === 'ROADS' || upper.includes('ROADS') || upper === 'ROADS_INFRASTRUCTURE') return 'ROADS';
+    if (upper === 'WATER' || upper.includes('WATER') || upper === 'WATER_SUPPLY') return 'WATER';
+    if (upper === 'SANITATION' || upper.includes('DRAINAGE') || upper.includes('SEWERAGE') || upper === 'DRAINAGE_SEWERAGE') return 'SANITATION';
+    if (upper === 'WASTE' || upper.includes('WASTE') || upper.includes('GARBAGE') || upper === 'WASTE_MANAGEMENT_SANITATION') return 'WASTE';
+    if (upper === 'ELECTRICAL' || upper.includes('STREETLIGHT') || upper.includes('ELECTRIC') || upper === 'STREETLIGHTS_ELECTRICITY') return 'ELECTRICAL';
+    if (upper === 'PUBLIC_WORKS' || upper.includes('PUBLIC_WORKS') || upper.includes('PUBLIC SAFETY') || upper === 'PUBLIC_SAFETY_OTHER_CIVIC_HAZARDS') return 'PUBLIC_WORKS';
+    return upper;
+};
+
 const AdminDashboard = () => {
     const { userInfo } = useAuth();
     const isSuperAdmin = userInfo?.role === 'super_admin' || userInfo?.role === 'admin';
     const isDeptHead = userInfo?.role === 'department_head';
-    const isDeptStaff = userInfo?.role === 'department_staff';
+    const isVerifier = userInfo?.role === 'verifier';
     const userDeptCode = userInfo?.departmentCode || '';
 
     const [metrics, setMetrics] = useState(null);
@@ -65,10 +129,15 @@ const AdminDashboard = () => {
     const [reassignReason, setReassignReason] = useState('');
     const [updating, setUpdating] = useState(false);
 
-    // AI Classification Correction Modal State
-    const [showAiModal, setShowAiModal] = useState(false);
-    const [aiModalComplaint, setAiModalComplaint] = useState(null);
-    const [correctForm, setCorrectForm] = useState({ category: '', subcategory: '', severity: 'Medium', priority: 'Medium' });
+    // Filter Tabs for Department Head
+    const [deptHeadTab, setDeptHeadTab] = useState('all'); // 'all', 'unassigned', 'assigned'
+
+    // Verifier Assignment Modal State (Phase 3)
+    const [showAssignVerifierModal, setShowAssignVerifierModal] = useState(false);
+    const [assignTargetComplaint, setAssignTargetComplaint] = useState(null);
+    const [selectedVerifierId, setSelectedVerifierId] = useState('');
+    const [assignReason, setAssignReason] = useState('');
+    const [assignErrorMessage, setAssignErrorMessage] = useState('');
 
     // Priority Change Modal State
     const [showPriorityModal, setShowPriorityModal] = useState(false);
@@ -78,18 +147,41 @@ const AdminDashboard = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [metricsRes, complaintsRes, deptsRes] = await Promise.all([
+            let complaintsData = [];
+            const [metricsRes, deptsRes] = await Promise.all([
                 api.get('/admin/metrics'),
-                api.get('/admin/complaints'),
                 api.get('/departments')
             ]);
             setMetrics(metricsRes.data);
-            setComplaints(complaintsRes.data);
             setDepartments(deptsRes.data);
+
+            if (isVerifier) {
+                try {
+                    const assignedRes = await api.get('/complaints/assigned-to-me');
+                    complaintsData = assignedRes.data;
+                } catch (e) {
+                    const allRes = await api.get('/admin/complaints');
+                    complaintsData = allRes.data;
+                }
+            } else if (isDeptHead) {
+                try {
+                    const deptCompRes = await api.get('/department/complaints');
+                    complaintsData = deptCompRes.data?.complaints || (Array.isArray(deptCompRes.data) ? deptCompRes.data : []);
+                } catch (e) {
+                    const allRes = await api.get('/admin/complaints');
+                    complaintsData = allRes.data;
+                }
+            } else {
+                const complaintsRes = await api.get('/admin/complaints');
+                complaintsData = complaintsRes.data;
+            }
+            setComplaints(complaintsData);
 
             if (isDeptHead) {
                 try {
-                    const staffRes = await api.get('/department/staff');
+                    const staffRes = await api.get('/department/staff', {
+                        params: userDeptCode ? { departmentCode: userDeptCode } : {}
+                    });
                     setStaffMembers(staffRes.data.staffMembers || []);
                 } catch (e) {
                     console.error('Failed to fetch department staff list:', e);
@@ -104,7 +196,7 @@ const AdminDashboard = () => {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [userInfo?.role, userInfo?.departmentCode]);
 
     const handleQuickAssign = async () => {
         if (!selectedComplaint || !targetDeptCode) return;
@@ -119,6 +211,100 @@ const AdminDashboard = () => {
             await fetchData();
         } catch (error) {
             alert('Failed to reassign department');
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleOpenAssignModal = async (c) => {
+        setAssignTargetComplaint(c);
+        setAssignErrorMessage('');
+        const verifierObj = c.assignedVerifier || c.assignedTo;
+        const currentVerifierId = getCanonicalUserId(verifierObj);
+
+        setSelectedVerifierId(currentVerifierId);
+        setAssignReason('');
+        setShowAssignVerifierModal(true);
+
+        const deptCode = normalizeDeptCode(c.departmentCode) || normalizeDeptCode(userDeptCode);
+        try {
+            const staffRes = await api.get('/department/staff', {
+                params: deptCode ? { departmentCode: deptCode } : {}
+            });
+            const members = staffRes.data?.staffMembers || [];
+            if (members.length > 0) {
+                setStaffMembers(members);
+                if (currentVerifierId) {
+                    const matched = members.find(m => 
+                        getCanonicalUserId(m) === currentVerifierId || 
+                        m.email === currentVerifierId || 
+                        String(m._id) === currentVerifierId
+                    );
+                    if (matched) {
+                        setSelectedVerifierId(getCanonicalUserId(matched));
+                    }
+                }
+            } else {
+                const fallbackRes = await api.get('/admin/department-users');
+                const allUsers = fallbackRes.data || [];
+                const verifiers = allUsers.filter(u => u.role === 'verifier' || u.role === 'department_staff');
+                setStaffMembers(verifiers);
+            }
+        } catch (e) {
+            try {
+                const fallbackRes = await api.get('/admin/department-users');
+                const allUsers = fallbackRes.data || [];
+                const verifiers = allUsers.filter(u => u.role === 'verifier' || u.role === 'department_staff');
+                setStaffMembers(verifiers);
+            } catch (err) {
+                console.error('Failed to fetch department staff list on modal open:', err);
+            }
+        }
+    };
+
+    const handleAssignVerifier = async (e) => {
+        e?.preventDefault();
+        if (!assignTargetComplaint) return;
+        setAssignErrorMessage('');
+
+        const targetId = getCanonicalUserId(assignTargetComplaint._id || assignTargetComplaint.id || assignTargetComplaint.complaintId) || assignTargetComplaint.complaintId;
+        const cleanStaffId = getCanonicalUserId(selectedVerifierId) || (typeof selectedVerifierId === 'string' ? selectedVerifierId.trim() : '');
+        const currentVerifier = assignTargetComplaint.assignedVerifier || assignTargetComplaint.assignedTo;
+
+        // If no verifier selected and complaint is unassigned, stop with a clear error message (do NOT convert to unassign)
+        if (!cleanStaffId && !currentVerifier) {
+            setAssignErrorMessage('Please select a field verifier from the dropdown before assigning.');
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            const isUnassigning = !cleanStaffId && !!currentVerifier;
+            const payload = {
+                complaintId: targetId,
+                staffId: cleanStaffId || null,
+                verifierId: cleanStaffId || null,
+                reason: assignReason || (cleanStaffId ? 'Assigned verifier by Dept Head' : 'Unassigned verifier by Dept Head'),
+                action: isUnassigning ? 'unassign' : 'assign'
+            };
+
+            console.log('[DEBUG handleAssignVerifier Payload]:', payload);
+            const response = await api.post('/department/assign', payload);
+
+            if (response.data?.success || response.status === 200) {
+                setShowAssignVerifierModal(false);
+                setAssignTargetComplaint(null);
+                setSelectedVerifierId('');
+                setAssignReason('');
+                setAssignErrorMessage('');
+                await fetchData();
+            } else {
+                setAssignErrorMessage(response.data?.message || 'Assignment failed');
+            }
+        } catch (error) {
+            console.error('Failed to assign verifier:', error);
+            const msg = error.response?.data?.message || error.message || 'Failed to assign verifier';
+            setAssignErrorMessage(msg);
         } finally {
             setUpdating(false);
         }
@@ -167,6 +353,15 @@ const AdminDashboard = () => {
     ];
 
     const filteredComplaints = complaints.filter(c => {
+        const isVerifierAssigned = !!(c.assignedVerifier || c.assignedTo);
+        const matchesDeptHeadScope = !isDeptHead || (
+            normalizeDeptCode(c.departmentCode) === normalizeDeptCode(userDeptCode) ||
+            normalizeDeptCode(c.assignedDepartment) === normalizeDeptCode(userDeptCode)
+        );
+        const matchesDeptHeadTab = !isDeptHead || deptHeadTab === 'all' ||
+            (deptHeadTab === 'unassigned' && !isVerifierAssigned) ||
+            (deptHeadTab === 'assigned' && isVerifierAssigned);
+
         const matchesStatus = filterStatus === 'all' || c.status === filterStatus;
         const matchesDept = filterDepartment === 'all' || c.departmentCode === filterDepartment;
         const matchesSla = filterSlaStatus === 'all' || (c.sla && c.sla.status === filterSlaStatus);
@@ -179,7 +374,7 @@ const AdminDashboard = () => {
             (c.assignedDepartment && c.assignedDepartment.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (c.user?.name && c.user.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-        return matchesStatus && matchesDept && matchesSla && matchesEscalation && matchesPriority && matchesSeverity && matchesSearch;
+        return matchesDeptHeadScope && matchesDeptHeadTab && matchesStatus && matchesDept && matchesSla && matchesEscalation && matchesPriority && matchesSeverity && matchesSearch;
     });
 
     if (loading) return (
@@ -195,7 +390,7 @@ const AdminDashboard = () => {
                 <div className="space-y-2">
                     <div className="flex items-center gap-2">
                         <span className="px-3 py-1 bg-primary-600 text-white text-[10px] font-black uppercase rounded-lg">
-                            CivicFix Admin Portal
+                            CivicFix Operations Portal
                         </span>
                         {userDeptCode && (
                             <span className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg font-mono">
@@ -205,15 +400,17 @@ const AdminDashboard = () => {
                     </div>
                     <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight uppercase italic">
                         {isSuperAdmin
-                            ? 'System Administration'
+                            ? 'System Administration (Monitor Mode)'
                             : isDeptHead
-                            ? `${userDeptCode} Department Head Dashboard`
-                            : `${userDeptCode} Field Staff Workspace`}
+                            ? `${userDeptCode} Department Head Command Center`
+                            : `${userDeptCode} Field Verifier Work Queue`}
                     </h1>
                     <p className="text-slate-500 font-bold tracking-widest text-xs uppercase">
                         {isSuperAdmin
-                            ? 'City-Wide Civic Intelligence, SLA Monitoring & Department Management'
-                            : 'Department Operational Command Center & Workload Queue'}
+                            ? 'City-Wide Intelligence & Multi-Department Oversight'
+                            : isDeptHead
+                            ? 'Manage Complaints & Assign Verifiers'
+                            : 'Field Inspection & Verification Queue'}
                     </p>
                 </div>
 
@@ -229,7 +426,7 @@ const AdminDashboard = () => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
                             type="text"
-                            placeholder="Search complaint ID, title, department..."
+                            placeholder="Search ID, title, department..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-9 pr-4 py-2 bg-white rounded-xl text-xs font-semibold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -254,6 +451,36 @@ const AdminDashboard = () => {
                     </div>
                 ))}
             </div>
+
+            {/* Department Head Assignment Queue Tabs */}
+            {isDeptHead && (
+                <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm w-fit">
+                    <button
+                        onClick={() => setDeptHeadTab('all')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                            deptHeadTab === 'all' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        All Complaints ({complaints.length})
+                    </button>
+                    <button
+                        onClick={() => setDeptHeadTab('unassigned')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                            deptHeadTab === 'unassigned' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        Unassigned Queue ({complaints.filter(c => !(c.assignedVerifier || c.assignedTo)).length})
+                    </button>
+                    <button
+                        onClick={() => setDeptHeadTab('assigned')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                            deptHeadTab === 'assigned' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        Assigned Queue ({complaints.filter(c => !!(c.assignedVerifier || c.assignedTo)).length})
+                    </button>
+                </div>
+            )}
 
             {/* Filter Bar */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap items-center justify-between gap-4">
@@ -288,9 +515,12 @@ const AdminDashboard = () => {
                             className="px-3 py-1.5 bg-slate-50 rounded-xl text-xs font-bold text-slate-700 border border-slate-200 focus:outline-none"
                         >
                             <option value="all">All Departments</option>
-                            {departments.map((d) => (
-                                <option key={d._id} value={d.code}>{d.name}</option>
-                            ))}
+                            {departments.map((d, idx) => {
+                                const deptKey = getCanonicalUserId(d.code) || getCanonicalUserId(d._id) || d.code || `dept-flt-${idx}`;
+                                return (
+                                    <option key={deptKey} value={d.code}>{d.name}</option>
+                                );
+                            })}
                         </select>
                     )}
 
@@ -339,8 +569,10 @@ const AdminDashboard = () => {
             <div className="card-premium overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <div>
-                        <h2 className="text-lg font-black text-slate-900 uppercase italic">Complaints Queue & Routing Matrix</h2>
-                        <p className="text-xs text-slate-500 font-medium">Showing {filteredComplaints.length} of {complaints.length} total records</p>
+                        <h2 className="text-lg font-black text-slate-900 uppercase italic">
+                            {isDeptHead ? `${userDeptCode} Department Operations Matrix` : isVerifier ? 'Assigned Field Verifications' : 'City Operations & Complaints Overview'}
+                        </h2>
+                        <p className="text-xs text-slate-500 font-medium">Showing {filteredComplaints.length} of {complaints.length} records</p>
                     </div>
                 </div>
 
@@ -350,111 +582,219 @@ const AdminDashboard = () => {
                             <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                                 <th className="p-4">Complaint ID</th>
                                 <th className="p-4">Issue Details</th>
-                                <th className="p-4">Assigned Department</th>
-                                <th className="p-4">Priority / Severity</th>
+                                <th className="p-4">Department</th>
+                                <th className="p-4">Assigned Verifier</th>
+                                <th className="p-4">Priority</th>
                                 <th className="p-4">SLA State</th>
-                                <th className="p-4">Escalation</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs font-semibold">
-                            {filteredComplaints.map((c) => (
-                                <tr key={c._id} className="hover:bg-slate-50/80 transition-colors">
-                                    <td className="p-4 font-mono font-bold text-primary-600">
-                                        <Link to={`/admin/complaint/${c._id}`} className="hover:underline">
-                                            #{c.complaintId}
-                                        </Link>
-                                    </td>
-                                    <td className="p-4 max-w-xs">
-                                        <p className="font-bold text-slate-900 truncate">{c.title}</p>
-                                        <span className="text-[10px] text-slate-500 font-semibold">{c.category} • {c.subcategory || 'General'}</span>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-1.5">
-                                            <Building2 size={14} className="text-slate-400" />
-                                            <span className="font-bold text-slate-800">{c.assignedDepartment || 'General Administration'}</span>
-                                        </div>
-                                        <span className="text-[9px] font-mono text-slate-400">{c.departmentCode || 'GENERAL'} • Source: {c.assignmentSource || 'automatic'}</span>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-1.5">
+                            {filteredComplaints.map((c, idx) => {
+                                const verifierObj = c.assignedVerifier || c.assignedTo;
+                                const canonicalId = getCanonicalUserId(c._id);
+                                const rowKey = canonicalId || (typeof c._id === 'string' && c._id !== '[object Object]' ? c._id : null) || c.complaintId || `complaint-row-${idx}`;
+                                const complaintLinkParam = canonicalId || (typeof c._id === 'string' && c._id !== '[object Object]' ? c._id : null) || c.complaintId;
+                                return (
+                                    <tr key={rowKey} className="hover:bg-slate-50/80 transition-colors">
+                                        <td className="p-4 font-mono font-bold text-primary-600">
+                                            <Link to={`/admin/complaint/${complaintLinkParam}`} className="hover:underline">
+                                                #{c.complaintId}
+                                            </Link>
+                                        </td>
+                                        <td className="p-4 max-w-xs">
+                                            <p className="font-bold text-slate-900 truncate">{c.title}</p>
+                                            <span className="text-[10px] text-slate-500 font-semibold">{c.category} • {c.subcategory || 'General'}</span>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-1.5">
+                                                <Building2 size={14} className="text-slate-400" />
+                                                <span className="font-bold text-slate-800">{c.assignedDepartment || c.departmentCode}</span>
+                                            </div>
+                                            <span className="text-[9px] font-mono text-slate-400">{c.departmentCode || 'GENERAL'}</span>
+                                        </td>
+                                        <td className="p-4">
+                                            {verifierObj ? (
+                                                <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg w-fit">
+                                                    <ShieldCheck size={14} />
+                                                    <span className="font-bold text-xs">{verifierObj.name}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg font-bold">
+                                                    Unassigned
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="p-4">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
                                                 c.priority === 'Critical' ? 'bg-red-100 text-red-700' :
                                                 c.priority === 'High' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'
                                             }`}>
                                                 {c.priority || c.severity || 'Medium'}
                                             </span>
-                                        </div>
-                                    </td>
-                                    <td className="p-4">
-                                        {c.sla ? (
-                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                                                c.sla.status === 'breached' ? 'bg-red-100 text-red-700 animate-pulse' :
-                                                c.sla.status === 'due_soon' ? 'bg-amber-100 text-amber-700' :
-                                                c.sla.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                                        </td>
+                                        <td className="p-4">
+                                            {c.sla ? (
+                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                                    c.sla.status === 'breached' ? 'bg-red-100 text-red-700 animate-pulse' :
+                                                    c.sla.status === 'due_soon' ? 'bg-amber-100 text-amber-700' :
+                                                    c.sla.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                                                }`}>
+                                                    {c.sla.status ? c.sla.status.replace('_', ' ') : 'on track'}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-400 font-mono">N/A</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase ${
+                                                c.status === 'Resolved' || c.status === 'Closed' ? 'bg-emerald-500 text-white' :
+                                                c.status === 'In Progress' || c.status === 'Assigned' ? 'bg-amber-500 text-white' :
+                                                c.status === 'Reopened' ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white'
                                             }`}>
-                                                {c.sla.status ? c.sla.status.replace('_', ' ') : 'on track'}
+                                                {c.status}
                                             </span>
-                                        ) : (
-                                            <span className="text-[10px] text-slate-400 font-mono">N/A</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                            c.escalationLevel > 1 ? 'bg-purple-100 text-purple-800 font-bold' :
-                                            c.escalationLevel === 1 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-400'
-                                        }`}>
-                                            L{c.escalationLevel || 0}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase ${
-                                            c.status === 'Resolved' || c.status === 'Closed' ? 'bg-emerald-500 text-white' :
-                                            c.status === 'In Progress' || c.status === 'Assigned' ? 'bg-amber-500 text-white' :
-                                            c.status === 'Reopened' ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white'
-                                        }`}>
-                                            {c.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button
-                                                onClick={() => {
-                                                    setPriorityComplaint(c);
-                                                    setSelectedPriority(c.priority || 'Medium');
-                                                    setShowPriorityModal(true);
-                                                }}
-                                                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold transition-colors"
-                                            >
-                                                Priority
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedComplaint(c);
-                                                    setTargetDeptCode(c.departmentCode || 'GENERAL');
-                                                    setShowReassignModal(true);
-                                                }}
-                                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors"
-                                            >
-                                                Reassign
-                                            </button>
-                                            <Link
-                                                to={`/admin/complaint/${c._id}`}
-                                                className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-[10px] font-bold transition-colors"
-                                            >
-                                                Details
-                                            </Link>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                                            {c.verificationState && c.verificationState !== 'UNVERIFIED' && (
+                                                <span className="block mt-1 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-mono truncate">
+                                                    {c.verificationState === 'AWAITING_REVIEW' ? '📋 Awaiting Review' : `Report: ${c.verificationState.replace('VERIFIED_', '')}`}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                {/* Department Head Assignment Control */}
+                                                {isDeptHead && (
+                                                    normalizeDeptCode(c.departmentCode) === normalizeDeptCode(userDeptCode) ||
+                                                    normalizeDeptCode(c.assignedDepartment) === normalizeDeptCode(userDeptCode)
+                                                ) && (
+                                                    <button
+                                                        onClick={() => handleOpenAssignModal(c)}
+                                                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                                                            verifierObj
+                                                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-700'
+                                                                : 'bg-primary-50 hover:bg-primary-100 text-primary-700'
+                                                        }`}
+                                                    >
+                                                        {verifierObj ? 'Reassign Verifier' : 'Assign Verifier'}
+                                                    </button>
+                                                )}
+
+                                                <Link
+                                                    to={`/admin/complaint/${complaintLinkParam}`}
+                                                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition-colors"
+                                                >
+                                                    Details
+                                                </Link>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Reassign Modal */}
+            {/* Department Head Verifier Assignment Modal (Phase 3) */}
+            {showAssignVerifierModal && assignTargetComplaint && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 uppercase italic">
+                                    Assign Field Verifier
+                                </h3>
+                                <p className="text-xs text-slate-500 font-mono">
+                                    Complaint #{assignTargetComplaint.complaintId} • Dept: {userDeptCode}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowAssignVerifierModal(false)}
+                                className="text-slate-400 hover:text-slate-600 font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAssignVerifier} className="space-y-4">
+                            {assignErrorMessage && (
+                                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2 animate-in fade-in">
+                                    <AlertTriangle size={16} className="text-rose-500 shrink-0" />
+                                    <span>{assignErrorMessage}</span>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-700 uppercase mb-1 block">
+                                    Select {userDeptCode} Verifier
+                                </label>
+                                <select
+                                    id="verifier-select-dropdown"
+                                    value={selectedVerifierId}
+                                    onChange={(e) => {
+                                        const selectedVal = e.target.value;
+                                        console.log('[DEBUG Verifier Dropdown onChange fired]:', selectedVal);
+                                        setSelectedVerifierId(selectedVal);
+                                        setAssignErrorMessage('');
+                                    }}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                >
+                                    <option value="">-- Unassigned (Clear Verifier) --</option>
+                                    {staffMembers.map((staff, idx) => {
+                                        const dbId = getCanonicalUserId(staff);
+                                        const optKey = dbId || staff.email || `staff-opt-${idx}`;
+                                        return (
+                                            <option key={optKey} value={dbId}>
+                                                {staff.name} ({staff.email}) - {staff.role}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-700 uppercase mb-1 block">
+                                    Assignment Note / Reason
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    placeholder="Enter operational directive or assignment note..."
+                                    value={assignReason}
+                                    onChange={(e) => setAssignReason(e.target.value)}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAssignVerifierModal(false)}
+                                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={updating}
+                                    className="px-5 py-2 bg-primary-600 text-white rounded-xl text-xs font-bold hover:bg-primary-700 transition-colors flex items-center gap-2"
+                                >
+                                    {updating && <Loader2 className="animate-spin" size={14} />}
+                                    <span>
+                                        {selectedVerifierId
+                                            ? 'Assign Field Verifier'
+                                            : (assignTargetComplaint?.assignedVerifier || assignTargetComplaint?.assignedTo)
+                                                ? 'Unassign Verifier'
+                                                : 'Assign Field Verifier'}
+                                    </span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Department Reassignment Modal (Super Admin / Admin) */}
             {showReassignModal && selectedComplaint && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
@@ -473,9 +813,12 @@ const AdminDashboard = () => {
                                     onChange={(e) => setTargetDeptCode(e.target.value)}
                                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                                 >
-                                    {departments.map((d) => (
-                                        <option key={d._id} value={d.code}>{d.name} ({d.code})</option>
-                                    ))}
+                                    {departments.map((d, idx) => {
+                                        const deptKey = getCanonicalUserId(d.code) || getCanonicalUserId(d._id) || d.code || `dept-reassign-${idx}`;
+                                        return (
+                                            <option key={deptKey} value={d.code}>{d.name} ({d.code})</option>
+                                        );
+                                    })}
                                 </select>
                             </div>
 

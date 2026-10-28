@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext } from 'react';
 import api from '../api';
 
 const AuthContext = createContext();
@@ -24,13 +24,44 @@ export const AuthProvider = ({ children }) => {
         return data;
     };
 
+    const requestCitizenOtp = async (phone) => {
+        const { data } = await api.post('/auth/citizen/request-otp', { phone });
+        return data;
+    };
+
+    const verifyCitizenOtp = async (phone, otp) => {
+        const { data } = await api.post('/auth/citizen/verify-otp', { phone, otp });
+        const userPayload = data.user ? { ...data.user, token: data.token } : data;
+        setUserInfo(userPayload);
+        localStorage.setItem('userInfo', JSON.stringify(userPayload));
+        return userPayload;
+    };
+
+    const loginCitizenDemo = async () => {
+        const { data } = await api.post('/auth/demo-citizen');
+        const userPayload = data.user ? { ...data.user, token: data.token } : data;
+        setUserInfo(userPayload);
+        localStorage.setItem('userInfo', JSON.stringify(userPayload));
+        return userPayload;
+    };
+
     const logout = () => {
         setUserInfo(null);
         localStorage.removeItem('userInfo');
     };
 
     return (
-        <AuthContext.Provider value={{ userInfo, login, register, logout }}>
+        <AuthContext.Provider
+            value={{
+                userInfo,
+                login,
+                register,
+                requestCitizenOtp,
+                verifyCitizenOtp,
+                loginCitizenDemo,
+                logout,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

@@ -1,10 +1,10 @@
-/**
- * Role-Based Access Control (RBAC) & Department Scoping Middleware
- */
+const { protect } = require('./authMiddleware');
+const { normalizeDepartmentCode } = require('../config/departmentConfig');
 
 /**
  * Ensures user has one of the required roles.
  * Treats 'admin' as 'super_admin' for full backward compatibility.
+ * Treats 'department_staff' as 'verifier' for backward compatibility.
  */
 const requireRoles = (...allowedRoles) => {
     return (req, res, next) => {
@@ -15,7 +15,10 @@ const requireRoles = (...allowedRoles) => {
         const userRole = req.user.role;
         const isSuperAdmin = userRole === 'super_admin' || userRole === 'admin';
 
-        if (isSuperAdmin || allowedRoles.includes(userRole)) {
+        const roles = allowedRoles.flat();
+        const effectiveRoles = roles.map(r => r === 'verifier' ? ['verifier', 'department_staff'] : r).flat();
+
+        if (isSuperAdmin || effectiveRoles.includes(userRole)) {
             return next();
         }
 
@@ -27,8 +30,8 @@ const requireRoles = (...allowedRoles) => {
 
 /**
  * Mandatory backend department isolation middleware.
- * Guarantees that Department Heads and Staff ONLY query their assigned department.
- * Prevents parameter tampering (e.g. Roads Head passing ?departmentCode=WATER).
+ * Guarantees that Department Heads and Verifiers ONLY query their assigned department.
+ * Prevents parameter tampering (e.g. Roads Head passing ?departmentCode=WATER_DRAINAGE).
  */
 const enforceDepartmentScope = (req, res, next) => {
     if (!req.user) {
@@ -43,18 +46,18 @@ const enforceDepartmentScope = (req, res, next) => {
         return next();
     }
 
-    // Department Heads & Staff are strictly bound to their assigned departmentCode
-    if (userRole === 'department_head' || userRole === 'department_staff') {
+    // Department Heads & Verifiers are strictly bound to their assigned departmentCode
+    if (['department_head', 'verifier', 'department_staff'].includes(userRole)) {
         if (!req.user.departmentCode) {
             return res.status(403).json({
                 message: 'Forbidden: User is missing an assigned department code',
             });
         }
 
-        // Force backend department code scope; override client-provided tampering
-        req.departmentCode = req.user.departmentCode.toUpperCase();
+        const normalizedCode = normalizeDepartmentCode(req.user.departmentCode);
+        req.departmentCode = normalizedCode;
         req.query = req.query || {};
-        req.query.departmentCode = req.departmentCode;
+        req.query.departmentCode = normalizedCode;
         req.isGlobalScope = false;
 
         return next();
@@ -67,6 +70,11 @@ const enforceDepartmentScope = (req, res, next) => {
 };
 
 module.exports = {
+    requireAuth: protect,
     requireRoles,
+    requireRole: requireRoles,
     enforceDepartmentScope,
+    requireDepartment: enforceDepartmentScope,
+    requireDepartmentAccess: enforceDepartmentScope,
 };
+

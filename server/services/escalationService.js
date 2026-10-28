@@ -1,6 +1,7 @@
 const Complaint = require('../models/Complaint');
 const slaService = require('./slaService');
 const ErrorResponse = require('../utils/errorResponse');
+const { findComplaintByIdOrCode } = require('../utils/idHelper');
 
 /**
  * Escalation Service
@@ -70,7 +71,7 @@ const checkAndUpdateEscalation = async (complaintDoc) => {
 };
 
 const manuallyEscalateComplaint = async (complaintId, adminId, reason = 'Administrative escalation') => {
-    const complaint = await Complaint.findById(complaintId);
+    const complaint = await findComplaintByIdOrCode(complaintId, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }

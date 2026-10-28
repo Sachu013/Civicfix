@@ -33,6 +33,9 @@ Thumbs.db
 
 # Temporary & Workspace Folders
 tmp/
+scratch/
+scripts/
+server/scripts/
 /brain/
 .agents/
 .agent/

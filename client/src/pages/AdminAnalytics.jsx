@@ -7,39 +7,28 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
     LineChart,
-    Line,
-    Legend
+    Line
 } from 'recharts';
 import {
     Activity,
     AlertTriangle,
     BarChart3,
-    Building2,
     Calendar,
     CheckCircle,
     Clock,
-    Filter,
     Flame,
-    Layers,
     Loader2,
-    MapPin,
     MessageSquare,
     TrendingUp,
     Zap,
     Bot,
-    Sparkles,
     ShieldAlert,
     RefreshCw
 } from 'lucide-react';
 import api from '../api';
 import AnalyticsMap from '../components/AnalyticsMap';
 import { useAuth } from '../context/AuthContext';
-
-const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
 const AdminAnalytics = () => {
     const { userInfo } = useAuth();
@@ -55,6 +44,8 @@ const AdminAnalytics = () => {
     const [filterStatus, setFilterStatus] = useState('all');
 
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
+
     const [overview, setOverview] = useState(null);
     const [categories, setCategories] = useState(null);
     const [severityPriority, setSeverityPriority] = useState(null);
@@ -69,6 +60,7 @@ const AdminAnalytics = () => {
 
     const fetchAnalytics = async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = {};
             if (period === 'custom') {
@@ -82,19 +74,7 @@ const AdminAnalytics = () => {
             if (filterDepartment !== 'all') params.departmentCode = filterDepartment;
             if (filterStatus !== 'all') params.status = filterStatus;
 
-            const [
-                overviewRes,
-                catRes,
-                sevPriRes,
-                deptRes,
-                slaRes,
-                trendRes,
-                geoRes,
-                hotspotRes,
-                anomalyRes,
-                insightRes,
-                deptListRes
-            ] = await Promise.all([
+            const results = await Promise.allSettled([
                 api.get('/admin/analytics/overview', { params }),
                 api.get('/admin/analytics/categories', { params }),
                 api.get('/admin/analytics/severity-priority', { params }),
@@ -108,19 +88,32 @@ const AdminAnalytics = () => {
                 api.get('/departments')
             ]);
 
-            setOverview(overviewRes.data);
-            setCategories(catRes.data);
-            setSeverityPriority(sevPriRes.data);
-            setDepartments(deptRes.data);
-            setSlaData(slaRes.data);
-            setTrends(trendRes.data);
-            setGeospatial(geoRes.data);
-            setHotspots(hotspotRes.data);
-            setAnomalies(anomalyRes.data);
-            setInsights(insightRes.data);
-            setDeptList(deptListRes.data);
+            const getData = (index, defaultVal) => {
+                if (results[index].status === 'fulfilled' && results[index].value?.data) {
+                    return results[index].value.data;
+                }
+                return defaultVal;
+            };
+
+            const overviewVal = getData(0, {
+                total: 0, open: 0, resolved: 0, closed: 0, critical: 0,
+                slaBreached: 0, escalated: 0, resolutionRate: 0, slaComplianceRate: 0
+            });
+            setOverview(overviewVal);
+            setCategories(getData(1, { categories: [] }));
+            setSeverityPriority(getData(2, { severity: [], priority: [] }));
+            setDepartments(getData(3, []));
+            setSlaData(getData(4, { totalEvaluated: 0, complianceRate: 0 }));
+            setTrends(getData(5, { timeSeries: [], percentageChange: 0, interval: 'Daily' }));
+            setGeospatial(getData(6, { type: 'FeatureCollection', features: [] }));
+            setHotspots(getData(7, { totalHotspots: 0, hotspots: [] }));
+            setAnomalies(getData(8, { anomalyDetected: false, anomalies: [] }));
+            setInsights(getData(9, { executiveSummary: 'System telemetry monitoring active.', insights: [] }));
+            setDeptList(getData(10, []));
+
         } catch (error) {
             console.error('Failed to load civic analytics:', error);
+            setFetchError(error.message || 'Failed to load telemetry analytics');
         } finally {
             setLoading(false);
         }
@@ -130,36 +123,70 @@ const AdminAnalytics = () => {
         fetchAnalytics();
     }, [period, startDate, endDate, filterCategory, filterDepartment, filterStatus]);
 
-    if (loading || !overview) return (
-        <div className="h-[70vh] flex items-center justify-center">
+    if (loading) return (
+        <div className="h-[70vh] flex flex-col items-center justify-center space-y-4">
             <Loader2 className="animate-spin text-primary-500" size={48} />
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Telemetry & Analytics...</p>
         </div>
     );
 
+    if (fetchError && !overview) return (
+        <div className="p-8 max-w-lg mx-auto my-12 bg-white rounded-3xl border border-rose-100 shadow-xl space-y-6 text-center">
+            <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                <AlertTriangle size={32} />
+            </div>
+            <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900 uppercase italic">Failed to Load Civic Analytics</h3>
+                <p className="text-xs text-slate-500 font-medium">{fetchError}</p>
+            </div>
+            <button
+                onClick={fetchAnalytics}
+                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition-all shadow-md inline-flex items-center gap-2 uppercase tracking-wider"
+            >
+                <RefreshCw size={16} />
+                <span>Retry Request</span>
+            </button>
+        </div>
+    );
+
+    const safeOverview = overview || {
+        total: 0, open: 0, resolved: 0, closed: 0, critical: 0,
+        slaBreached: 0, escalated: 0, resolutionRate: 0, slaComplianceRate: 0
+    };
+
+    const totalResolved = (safeOverview.resolved || 0) + (safeOverview.closed || 0);
+
     const summaryCards = [
-        { label: 'Total Complaints', value: overview.total, icon: MessageSquare, color: 'text-primary-600', bg: 'bg-primary-50' },
-        { label: 'Open Complaints', value: overview.open, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-        { label: 'Resolved Complaints', value: overview.resolved + overview.closed, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-        { label: 'Critical Priority', value: overview.critical, icon: Flame, color: 'text-red-600', bg: 'bg-red-50' },
-        { label: 'SLA Breached', value: overview.slaBreached, icon: Zap, color: 'text-rose-600', bg: 'bg-rose-50' },
-        { label: 'Escalated Count', value: overview.escalated, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50' },
-        { label: 'Resolution Rate', value: `${overview.resolutionRate}%`, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-        { label: 'SLA Compliance', value: `${overview.slaComplianceRate}%`, icon: BarChart3, color: 'text-teal-600', bg: 'bg-teal-50' },
+        { label: 'Total Complaints', value: safeOverview.total || 0, icon: MessageSquare, color: 'text-primary-600', bg: 'bg-primary-50' },
+        { label: 'Open Complaints', value: safeOverview.open || 0, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+        { label: 'Resolved Complaints', value: totalResolved, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        { label: 'Critical Priority', value: safeOverview.critical || 0, icon: Flame, color: 'text-red-600', bg: 'bg-red-50' },
+        { label: 'SLA Breached', value: safeOverview.slaBreached || 0, icon: Zap, color: 'text-rose-600', bg: 'bg-rose-50' },
+        { label: 'Escalated Count', value: safeOverview.escalated || 0, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50' },
+        { label: 'Resolution Rate', value: `${safeOverview.resolutionRate || 0}%`, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { label: 'SLA Compliance', value: `${safeOverview.slaComplianceRate || 0}%`, icon: BarChart3, color: 'text-teal-600', bg: 'bg-teal-50' },
     ];
 
     const complaintFeatures = (geospatial?.features || []).map(f => ({
-        _id: f.properties.id,
-        complaintId: f.properties.complaintId,
-        title: f.properties.title,
-        category: f.properties.category,
-        subcategory: f.properties.subcategory,
-        severity: f.properties.severity,
-        priority: f.properties.priority,
-        status: f.properties.status,
-        assignedDepartment: f.properties.assignedDepartment,
-        latitude: f.geometry.coordinates[1],
-        longitude: f.geometry.coordinates[0],
+        _id: f.properties?.id,
+        complaintId: f.properties?.complaintId,
+        title: f.properties?.title,
+        category: f.properties?.category,
+        subcategory: f.properties?.subcategory,
+        severity: f.properties?.severity,
+        priority: f.properties?.priority,
+        status: f.properties?.status,
+        assignedDepartment: f.properties?.assignedDepartment,
+        latitude: f.geometry?.coordinates?.[1] || 28.6139,
+        longitude: f.geometry?.coordinates?.[0] || 77.2090,
     }));
+
+    const safeDepartments = Array.isArray(departments) ? departments : [];
+    const safeHotspots = Array.isArray(hotspots?.hotspots) ? hotspots.hotspots : [];
+    const safeAnomalies = Array.isArray(anomalies?.anomalies) ? anomalies.anomalies : [];
+    const safeInsights = Array.isArray(insights?.insights) ? insights.insights : [];
+    const safeCategories = Array.isArray(categories?.categories) ? categories.categories : [];
+    const safeDeptList = Array.isArray(deptList) ? deptList : [];
 
     return (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
@@ -252,8 +279,8 @@ const AdminAnalytics = () => {
                         className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
                     >
                         <option value="all">All Categories</option>
-                        {categories?.categories?.map((c) => (
-                            <option key={c.category} value={c.category}>{c.category}</option>
+                        {safeCategories.map((c, idx) => (
+                            <option key={c.category || idx} value={c.category}>{c.category}</option>
                         ))}
                     </select>
 
@@ -265,8 +292,8 @@ const AdminAnalytics = () => {
                             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
                         >
                             <option value="all">All Departments</option>
-                            {deptList.map((d) => (
-                                <option key={d._id} value={d.code}>{d.name}</option>
+                            {safeDeptList.map((d, idx) => (
+                                <option key={d._id || idx} value={d.code}>{d.name}</option>
                             ))}
                         </select>
                     )}
@@ -286,20 +313,20 @@ const AdminAnalytics = () => {
                 </div>
 
                 <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-slate-200 text-sm font-semibold leading-relaxed">
-                    "{insights?.executiveSummary}"
+                    "{insights?.executiveSummary || 'Operational telemetry active.'}"
                 </div>
 
                 {/* Insights List Cards */}
                 <div className="grid md:grid-cols-3 gap-4">
-                    {insights?.insights?.map((ins, idx) => (
+                    {safeInsights.map((ins, idx) => (
                         <div key={idx} className="p-4 bg-white/10 rounded-xl border border-white/10 space-y-1">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-black text-primary-400 uppercase tracking-wider">{ins.type.replace('_', ' ')}</span>
+                                <span className="text-[10px] font-black text-primary-400 uppercase tracking-wider">{ins.type ? ins.type.replace('_', ' ') : 'Insight'}</span>
                                 <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
                                     ins.severity === 'Critical' ? 'bg-red-500 text-white' :
                                     ins.severity === 'High' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'
                                 }`}>
-                                    {ins.severity}
+                                    {ins.severity || 'Medium'}
                                 </span>
                             </div>
                             <h4 className="font-bold text-xs text-white">{ins.title}</h4>
@@ -327,14 +354,14 @@ const AdminAnalytics = () => {
             </div>
 
             {/* Volume Anomaly Alerts */}
-            {anomalies?.anomalyDetected && (
+            {anomalies?.anomalyDetected && safeAnomalies.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 text-rose-600">
                         <ShieldAlert size={20} />
                         <h3 className="text-sm font-black uppercase tracking-wider">Volume Anomaly Alerts Detected</h3>
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">
-                        {anomalies.anomalies.map((anom, idx) => (
+                        {safeAnomalies.map((anom, idx) => (
                             <div key={idx} className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
                                 <AlertTriangle className="text-rose-600 shrink-0 mt-1" size={20} />
                                 <div>
@@ -355,7 +382,7 @@ const AdminAnalytics = () => {
                     <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                         <div>
                             <h3 className="text-base font-black text-slate-900 uppercase italic">Complaint Volume Time-Series Trend</h3>
-                            <p className="text-xs text-slate-500 font-semibold">Period-over-period change: <span className={`font-black ${trends?.percentageChange > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{trends?.percentageChange > 0 ? '+' : ''}{trends?.percentageChange}%</span></p>
+                            <p className="text-xs text-slate-500 font-semibold">Period-over-period change: <span className={`font-black ${trends?.percentageChange > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{trends?.percentageChange > 0 ? '+' : ''}{trends?.percentageChange || 0}%</span></p>
                         </div>
                         <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-black uppercase">{trends?.interval || 'Daily'} Interval</span>
                     </div>
@@ -384,7 +411,7 @@ const AdminAnalytics = () => {
 
                     <div className="h-72 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={categories?.categories?.slice(0, 5) || []} layout="vertical">
+                            <BarChart data={safeCategories.slice(0, 5)} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                 <XAxis type="number" tick={{ fontSize: 10 }} />
                                 <YAxis dataKey="category" type="category" width={110} tick={{ fontSize: 9, fontWeight: 'bold' }} />
@@ -421,22 +448,22 @@ const AdminAnalytics = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-semibold">
-                            {departments.map((d) => (
-                                <tr key={d.code} className="hover:bg-slate-50/80 transition-colors">
-                                    <td className="p-4 font-extrabold text-slate-900">{d.name}</td>
+                            {safeDepartments.map((d, idx) => (
+                                <tr key={d.code || idx} className="hover:bg-slate-50/80 transition-colors">
+                                    <td className="p-4 font-extrabold text-slate-900">{d.name || d.code}</td>
                                     <td className="p-4 font-mono font-bold text-primary-600">{d.code}</td>
-                                    <td className="p-4 text-center font-bold">{d.totalAssigned}</td>
-                                    <td className="p-4 text-center text-amber-600 font-bold">{d.openCount}</td>
-                                    <td className="p-4 text-center text-emerald-600 font-bold">{d.resolvedCount}</td>
-                                    <td className="p-4 text-center text-red-600 font-bold">{d.criticalCount}</td>
-                                    <td className="p-4 text-center text-rose-600 font-bold">{d.breachedCount}</td>
-                                    <td className="p-4 text-center font-black">{d.resolutionRate}%</td>
+                                    <td className="p-4 text-center font-bold">{d.totalAssigned || 0}</td>
+                                    <td className="p-4 text-center text-amber-600 font-bold">{d.openCount || 0}</td>
+                                    <td className="p-4 text-center text-emerald-600 font-bold">{d.resolvedCount || 0}</td>
+                                    <td className="p-4 text-center text-red-600 font-bold">{d.criticalCount || 0}</td>
+                                    <td className="p-4 text-center text-rose-600 font-bold">{d.breachedCount || 0}</td>
+                                    <td className="p-4 text-center font-black">{d.resolutionRate || 0}%</td>
                                     <td className="p-4 text-center font-black">
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] ${
-                                            d.slaComplianceRate >= 90 ? 'bg-emerald-100 text-emerald-700' :
-                                            d.slaComplianceRate >= 75 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                                            (d.slaComplianceRate || 0) >= 90 ? 'bg-emerald-100 text-emerald-700' :
+                                            (d.slaComplianceRate || 0) >= 75 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
                                         }`}>
-                                            {d.slaComplianceRate}%
+                                            {d.slaComplianceRate || 0}%
                                         </span>
                                     </td>
                                 </tr>
@@ -462,7 +489,7 @@ const AdminAnalytics = () => {
                     <div className="lg:col-span-2">
                         <AnalyticsMap
                             complaints={complaintFeatures}
-                            hotspots={hotspots?.hotspots || []}
+                            hotspots={safeHotspots}
                             center={[28.6139, 77.2090]}
                             zoom={12}
                         />
@@ -473,8 +500,8 @@ const AdminAnalytics = () => {
                         <h4 className="text-xs font-black text-slate-900 uppercase">Top Hotspot Concentrations</h4>
 
                         <div className="space-y-3 max-h-[440px] overflow-y-auto pr-2">
-                            {hotspots?.hotspots && hotspots.hotspots.length > 0 ? (
-                                hotspots.hotspots.map((hs, idx) => (
+                            {safeHotspots.length > 0 ? (
+                                safeHotspots.map((hs, idx) => (
                                     <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-black text-rose-600 uppercase font-mono">Cluster #{idx + 1}</span>
@@ -486,7 +513,7 @@ const AdminAnalytics = () => {
                                         <p className="font-extrabold text-xs text-slate-900">{hs.dominantCategory}</p>
 
                                         <div className="text-[10px] text-slate-500 space-y-0.5 font-medium">
-                                            <p>Coordinates: {hs.center.latitude}, {hs.center.longitude}</p>
+                                            <p>Coordinates: {hs.center?.latitude}, {hs.center?.longitude}</p>
                                             {hs.criticalCount > 0 && <p className="text-red-600 font-bold">⚠️ Critical Priority: {hs.criticalCount}</p>}
                                             {hs.slaBreachedCount > 0 && <p className="text-amber-600 font-bold">🚨 SLA Breaches: {hs.slaBreachedCount}</p>}
                                         </div>

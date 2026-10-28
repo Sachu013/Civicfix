@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
 
-const registerUser = async ({ name, email, password, role }) => {
+const registerUser = async ({ name, email, password }) => {
     const userExists = await User.findOne({ email });
 
     if (userExists) {
@@ -12,7 +12,9 @@ const registerUser = async ({ name, email, password, role }) => {
         name,
         email,
         password,
-        role: role || 'citizen',
+        role: 'citizen',
+        departmentCode: undefined,
+        department: undefined,
     });
 
     return user;

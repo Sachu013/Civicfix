@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
     User,
     Mail,
+    Phone,
     Shield,
     Calendar,
     MapPin,
@@ -19,8 +20,8 @@ const Profile = () => {
 
     const profileStats = [
         { label: 'Security Level', value: 'Level 2 Verified', icon: ShieldCheck, color: 'text-green-500' },
-        { label: 'Contributions', value: '12 Reports', icon: User, color: 'text-primary-500' },
-        { label: 'City Impact', value: 'Top 5%', icon: Calendar, color: 'text-secondary-500' },
+        { label: 'Contributions', value: 'Civic Citizen', icon: User, color: 'text-primary-500' },
+        { label: 'City Impact', value: 'Active Citizen', icon: Calendar, color: 'text-secondary-500' },
     ];
 
     return (
@@ -78,15 +79,29 @@ const Profile = () => {
                     <h3 className="text-xl font-black text-slate-900 font-display">Identity Metadata</h3>
 
                     <div className="space-y-6">
-                        <div className="flex items-center gap-4 group">
-                            <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Mail size={20} />
+                        {userInfo.phone && (
+                            <div className="flex items-center gap-4 group">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Phone size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Authenticated Phone</p>
+                                    <p className="font-bold text-slate-800">{userInfo.phone}</p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Encrypted Email</p>
-                                <p className="font-bold text-slate-800">{userInfo.email}</p>
+                        )}
+
+                        {userInfo.email && (
+                            <div className="flex items-center gap-4 group">
+                                <div className="w-12 h-12 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Mail size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Email Address</p>
+                                    <p className="font-bold text-slate-800">{userInfo.email}</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="flex items-center gap-4 group">
                             <div className="w-12 h-12 rounded-2xl bg-secondary-50 text-secondary-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -94,7 +109,7 @@ const Profile = () => {
                             </div>
                             <div>
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Primary District</p>
-                                <p className="font-bold text-slate-800">Civic Center, Sector 4</p>
+                                <p className="font-bold text-slate-800">SmartCity Central Municipality</p>
                             </div>
                         </div>
 
@@ -103,8 +118,8 @@ const Profile = () => {
                                 <Bell size={20} />
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Notification Frequency</p>
-                                <p className="font-bold text-slate-800">Real-time Push Enabled</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Notification Status</p>
+                                <p className="font-bold text-slate-800">Active Real-time Alerts</p>
                             </div>
                         </div>
                     </div>
@@ -115,22 +130,18 @@ const Profile = () => {
                     <div className="relative z-10 space-y-8 h-full flex flex-col">
                         <h3 className="text-xl font-black font-display">System Integrity</h3>
                         <p className="text-slate-400 font-medium leading-relaxed opacity-80">
-                            Your account is secured with 256-bit encryption. All reported incidents are digitally signed and verified across the municipal network.
+                            Your account is authenticated via cryptographic OTP and protected with secure JWT tokens. All reported incidents are digitally signed across the municipal network.
                         </p>
 
                         <div className="mt-auto space-y-4">
                             <div className="flex justify-between items-center px-2">
                                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Public Reputation</span>
-                                <span className="text-xs font-black text-green-400">98/100</span>
+                                <span className="text-xs font-black text-green-400">100/100</span>
                             </div>
                             <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                                <div className="w-[98%] h-full bg-gradient-to-r from-primary-500 to-secondary-400"></div>
+                                <div className="w-[100%] h-full bg-gradient-to-r from-primary-500 to-secondary-400"></div>
                             </div>
                         </div>
-
-                        <button className="w-full h-14 bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-widest transition-all">
-                            Download Security Audit
-                        </button>
                     </div>
                 </div>
             </div>

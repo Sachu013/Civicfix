@@ -43,16 +43,30 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     ];
 
     const deptHeadLinks = [
-        { name: 'Dept Dashboard', path: '/department/dashboard', icon: LayoutDashboard },
+        { name: 'Dept Dashboard', path: '/admin-dashboard', icon: LayoutDashboard },
         { name: 'Department Queue', path: '/admin/manage', icon: FileText },
+        { name: 'Civic Analytics', path: '/admin/analytics', icon: BarChart3 },
     ];
 
     const deptStaffLinks = [
-        { name: 'Staff Workspace', path: '/staff/dashboard', icon: LayoutDashboard },
+        { name: 'Assigned Field Queue', path: '/admin/manage', icon: FileText },
+        { name: 'Civic Analytics', path: '/admin/analytics', icon: BarChart3 },
     ];
 
-    const isAdminRole = ['admin', 'super_admin', 'department_head', 'department_staff'].includes(userInfo?.role);
-    const links = isAdminRole ? adminLinks : citizenLinks;
+    let links = citizenLinks;
+    if (userInfo?.role === 'super_admin' || userInfo?.role === 'admin') {
+        links = adminLinks;
+    } else if (userInfo?.role === 'department_head') {
+        links = deptHeadLinks;
+    } else if (userInfo?.role === 'verifier' || userInfo?.role === 'department_staff') {
+        links = deptStaffLinks;
+    }
+
+    const homeTarget = ['admin', 'super_admin', 'department_head'].includes(userInfo?.role) 
+        ? '/admin-dashboard' 
+        : userInfo?.role === 'verifier' || userInfo?.role === 'department_staff'
+        ? '/admin/manage' 
+        : '/citizen-dashboard';
 
     return (
         <>
@@ -66,7 +80,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
             <aside className={`fixed top-0 left-0 h-full w-72 bg-white border-r border-slate-100 z-50 transition-all duration-500 lg:translate-x-0 ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
                 <div className="p-8">
-                    <Link to={userInfo?.role === 'admin' ? '/admin-dashboard' : '/citizen-dashboard'} className="flex items-center gap-3 group">
+                    <Link to={homeTarget} className="flex items-center gap-3 group">
                         <div className="w-10 h-10 bg-primary-600 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-200 group-hover:rotate-12 transition-transform">
                             <ShieldCheck className="text-white" size={24} />
                         </div>

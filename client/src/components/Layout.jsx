@@ -3,6 +3,8 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Menu, Bell, Search as SearchIcon } from 'lucide-react';
 
+import NotificationBell from './NotificationBell';
+
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const location = useLocation();
@@ -49,10 +51,7 @@ const Layout = () => {
                                 className="bg-slate-100/50 border-none rounded-2xl pl-11 pr-4 py-2.5 text-sm w-64 focus:ring-2 focus:ring-primary-500/20 transition-all focus:bg-white focus:shadow-sm"
                             />
                         </div>
-                        <button className="p-2.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all relative">
-                            <Bell size={20} />
-                            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 border-2 border-white rounded-full"></span>
-                        </button>
+                        <NotificationBell />
                         <div className="h-8 w-[1px] bg-slate-100 mx-2 hidden sm:block"></div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:block">
                             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}

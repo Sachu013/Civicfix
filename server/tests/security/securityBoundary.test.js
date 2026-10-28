@@ -52,13 +52,13 @@ async function runSecurityTests() {
         const waterHead = await User.findOneAndUpdate(
             { email: 'water_head_sec@test.com' },
             { name: 'Water Head', email: 'water_head_sec@test.com', password: 'password', role: 'department_head', departmentCode: 'WATER' },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         const roadsStaff = await User.findOneAndUpdate(
             { email: 'roads_staff_sec@test.com' },
-            { name: 'Roads Staff', email: 'roads_staff_sec@test.com', password: 'password', role: 'department_staff', departmentCode: 'ROADS' },
-            { upsert: true, new: true }
+            { name: 'Roads Staff', email: 'roads_staff_sec@test.com', password: 'password', role: 'verifier', departmentCode: 'ROADS' },
+            { upsert: true, returnDocument: 'after' }
         );
 
         const citizen1 = await User.findOneAndUpdate(

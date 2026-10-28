@@ -19,8 +19,12 @@ import {
     Calendar
 } from 'lucide-react';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const ManageComplaints = () => {
+    const { userInfo } = useAuth();
+    const isVerifier = userInfo?.role === 'verifier' || userInfo?.role === 'department_staff';
+
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('all');
@@ -29,8 +33,19 @@ const ManageComplaints = () => {
     useEffect(() => {
         const fetchComplaints = async () => {
             try {
+                if (isVerifier) {
+                    try {
+                        const { data } = await api.get('/complaints/assigned-to-me');
+                        if (Array.isArray(data)) {
+                            setComplaints(data);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('Fallback to admin complaints for verifier:', e);
+                    }
+                }
                 const { data } = await api.get('/admin/complaints');
-                setComplaints(data);
+                setComplaints(Array.isArray(data) ? data : []);
             } catch (error) {
                 // Ignore or handle gracefully
             } finally {
@@ -38,13 +53,13 @@ const ManageComplaints = () => {
             }
         };
         fetchComplaints();
-    }, []);
+    }, [userInfo?.role]);
 
     const filteredComplaints = complaints.filter((c) => {
         const matchesStatus = filterStatus === 'all' || c.status === filterStatus;
         const matchesSearch =
-            c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.complaintId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            c.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            c.complaintId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (c.user?.name && c.user.name.toLowerCase().includes(searchTerm.toLowerCase()));
         return matchesStatus && matchesSearch;
     });
@@ -56,8 +71,12 @@ const ManageComplaints = () => {
             <div className="card-premium p-8 lg:p-10">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mb-10">
                     <div className="space-y-1">
-                        <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">Incident <span className="text-primary-600">Vault</span></h1>
-                        <p className="text-slate-400 font-semibold text-sm">Managing city-wide infrastructure logs and resolution triggers.</p>
+                        <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">
+                            {isVerifier ? 'Assigned Field' : 'Incident'} <span className="text-primary-600">{isVerifier ? 'Queue' : 'Vault'}</span>
+                        </h1>
+                        <p className="text-slate-400 font-semibold text-sm">
+                            {isVerifier ? 'Investigate on-site complaints assigned directly to your node.' : 'Managing city-wide infrastructure logs and resolution triggers.'}
+                        </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
                         <div className="bg-slate-50 border border-slate-100 rounded-2xl p-1.5 flex gap-1">
@@ -154,7 +173,7 @@ const ManageComplaints = () => {
                                         </td>
                                         <td className="px-8 py-7 text-right">
                                             <Link
-                                                to={`/admin/complaint/${c._id}`}
+                                                to={`/admin/complaint/${c.complaintId || c._id}`}
                                                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-50 text-primary-600 rounded-xl hover:bg-primary-600 hover:text-white transition-all font-bold text-xs"
                                             >
                                                 Detailed Analysis

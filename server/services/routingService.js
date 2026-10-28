@@ -1,10 +1,10 @@
 const Department = require('../models/Department');
 const taxonomy = require('../config/complaintCategories');
-const { CATEGORY_TO_DEPARTMENT_CODE, LEGACY_CATEGORY_TO_DEPARTMENT_CODE } = require('../config/departmentConfig');
+const { CATEGORY_TO_DEPARTMENT_CODE, LEGACY_CATEGORY_TO_DEPARTMENT_CODE, normalizeDepartmentCode } = require('../config/departmentConfig');
 
 /**
  * Determines target department code based on category hierarchy.
- * Priority: finalClassification -> aiClassification -> citizen classification -> GENERAL
+ * Priority: finalClassification -> aiClassification -> citizen classification -> PUBLIC_WORKS
  */
 const determineDepartmentCode = ({ category, subcategory, aiClassification, finalClassification }) => {
     let targetCat = category;
@@ -19,7 +19,7 @@ const determineDepartmentCode = ({ category, subcategory, aiClassification, fina
     }
 
     if (!targetCat) {
-        return 'GENERAL';
+        return 'PUBLIC_WORKS';
     }
 
     // Try normalizing through central taxonomy
@@ -33,7 +33,7 @@ const determineDepartmentCode = ({ category, subcategory, aiClassification, fina
         return LEGACY_CATEGORY_TO_DEPARTMENT_CODE[targetCat];
     }
 
-    return 'GENERAL';
+    return normalizeDepartmentCode(targetCat);
 };
 
 /**
@@ -44,13 +44,13 @@ const determineDepartment = async ({ category, subcategory, aiClassification, fi
 
     let department = await Department.findOne({ code, active: true });
 
-    if (!department && code !== 'GENERAL') {
-        department = await Department.findOne({ code: 'GENERAL', active: true });
+    if (!department && code !== 'PUBLIC_WORKS') {
+        department = await Department.findOne({ code: 'PUBLIC_WORKS', active: true });
     }
 
     return {
         code: department ? department.code : code,
-        name: department ? department.name : 'General Administration',
+        name: department ? department.name : 'Public Works & Infrastructure',
         departmentId: department ? department._id : null,
         departmentDoc: department || null,
     };

@@ -1,6 +1,7 @@
 const Complaint = require('../models/Complaint');
 const Department = require('../models/Department');
 const ErrorResponse = require('../utils/errorResponse');
+const { findComplaintByIdOrCode } = require('../utils/idHelper');
 const taxonomy = require('../config/complaintCategories');
 const routingService = require('./routingService');
 const slaService = require('./slaService');
@@ -8,16 +9,15 @@ const escalationService = require('./escalationService');
 const notificationService = require('./notificationService');
 const uploadService = require('./uploadService');
 
-// Valid status transitions map
 const ALLOWED_STATUS_TRANSITIONS = {
     Submitted: ['Verified', 'Assigned', 'In Progress', 'Rejected'],
     Pending: ['Verified', 'Assigned', 'In Progress', 'Resolved', 'Rejected'], // Legacy support
     Verified: ['Assigned', 'In Progress', 'Rejected'],
-    Assigned: ['In Progress', 'Resolved', 'Reopened'],
-    'In Progress': ['Resolved'],
+    Assigned: ['In Progress', 'Resolved', 'Citizen Verification', 'Reopened'],
+    'In Progress': ['Resolved', 'Citizen Verification', 'Reopened'],
     Resolved: ['Citizen Verification', 'Closed', 'Reopened'],
     'Citizen Verification': ['Closed', 'Reopened'],
-    Reopened: ['In Progress', 'Assigned'],
+    Reopened: ['In Progress', 'Assigned', 'Resolved', 'Citizen Verification'],
     Closed: ['Reopened'],
     Rejected: ['Reopened'],
 };
@@ -94,7 +94,7 @@ const getAllComplaints = async (filters = {}) => {
 };
 
 const assignComplaint = async (id, adminId, { departmentCode, assignedTo, reason }) => {
-    const complaint = await Complaint.findById(id);
+    const complaint = await findComplaintByIdOrCode(id, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -165,7 +165,7 @@ const assignComplaint = async (id, adminId, { departmentCode, assignedTo, reason
 };
 
 const updateComplaintStatus = async (id, adminId, { status, note, resolutionNote, resolutionImageFile }) => {
-    const complaint = await Complaint.findById(id);
+    const complaint = await findComplaintByIdOrCode(id, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -228,13 +228,13 @@ const updateComplaintStatus = async (id, adminId, { status, note, resolutionNote
     const updated = await complaint.save();
 
     // Trigger status update notification
-    notificationService.notifyStatusUpdate({ complaint: updated, previousStatus, newStatus: status }).catch(() => {});
+    await notificationService.notifyOnStatusUpdate({ complaint: updated, previousStatus, newStatus: status }).catch((err) => console.error(err));
 
     return updated;
 };
 
 const updateComplaint = async (id, updateData, adminId) => {
-    const complaint = await Complaint.findById(id);
+    const complaint = await findComplaintByIdOrCode(id, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -264,7 +264,7 @@ const updateComplaint = async (id, updateData, adminId) => {
 };
 
 const updateComplaintClassification = async (id, adminId, classificationData = {}) => {
-    const complaint = await Complaint.findById(id);
+    const complaint = await findComplaintByIdOrCode(id, Complaint);
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);
     }
@@ -408,10 +408,13 @@ const getDashboardMetrics = async (filters = {}) => {
 };
 
 const getAssignmentHistory = async (complaintId) => {
-    const complaint = await Complaint.findById(complaintId)
-        .populate('assignmentHistory.changedBy', 'name email')
-        .populate('assignmentHistory.previousAssignee', 'name email')
-        .populate('assignmentHistory.newAssignee', 'name email');
+    const complaint = await findComplaintByIdOrCode(complaintId, Complaint);
+    if (!complaint) {
+        throw new ErrorResponse('Complaint not found', 404);
+    }
+    await complaint.populate('assignmentHistory.changedBy', 'name email');
+    await complaint.populate('assignmentHistory.previousAssignee', 'name email');
+    await complaint.populate('assignmentHistory.newAssignee', 'name email');
 
     if (!complaint) {
         throw new ErrorResponse('Complaint not found', 404);

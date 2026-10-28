@@ -45,6 +45,27 @@ const uploadSingleImage = (req, res, next) => {
     });
 };
 
+// Middleware for processing multiple image uploads from the 'evidence' form field (max 5 images)
+const uploadMultipleImages = (req, res, next) => {
+    const arrayUpload = upload.array('evidence', 5);
+
+    arrayUpload(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return next(new ErrorResponse('File size exceeds maximum allowed limit of 5 MB.', 400));
+            }
+            if (err.code === 'LIMIT_UNEXPECTED_FILE' || err.code === 'LIMIT_FILE_COUNT') {
+                return next(new ErrorResponse('Maximum 5 evidence images allowed per submission.', 400));
+            }
+            return next(new ErrorResponse(`Upload Error: ${err.message}`, 400));
+        } else if (err) {
+            return next(err);
+        }
+        next();
+    });
+};
+
 module.exports = {
     uploadSingleImage,
+    uploadMultipleImages,
 };

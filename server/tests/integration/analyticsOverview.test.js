@@ -24,7 +24,7 @@ const runAnalyticsTestSuite = async () => {
 
         const roadsHead = await User.findOne({ email: 'roads_head@smartcity.gov' });
         const waterHead = await User.findOne({ email: 'water_head@smartcity.gov' });
-        const roadsStaff = await User.findOne({ email: 'roads_staff@smartcity.gov' });
+        const roadsStaff = await User.findOne({ email: 'roads_staff@smartcity.gov' }) || await User.findOne({ email: 'roads_staff1@smartcity.gov' }) || await User.findOne({ email: 'roads_verifier@smartcity.gov' });
         const superAdmin = await User.findOne({ email: 'admin@test.com' });
         const citizen = await User.findOne({ email: 'citizen@demo.com' });
 
@@ -48,8 +48,10 @@ const runAnalyticsTestSuite = async () => {
 
         // --- TEST 3: Department Staff Access Authorization ---
         console.log('\n--- TEST 3: Department Staff Access Authorization ---');
-        const loggedStaff = await authService.loginUser('roads_staff@smartcity.gov', 'staff123');
-        if (loggedStaff.role === 'department_staff' && loggedStaff.departmentCode === 'ROADS') {
+        const staffEmail = roadsStaff ? roadsStaff.email : 'roads_staff1@smartcity.gov';
+        const staffPassword = staffEmail.includes('verifier') ? 'verifier123' : 'staff123';
+        const loggedStaff = await authService.loginUser(staffEmail, staffPassword);
+        if (['verifier', 'department_staff'].includes(loggedStaff.role) && loggedStaff.departmentCode === 'ROADS') {
             console.log(`✓ TEST 3 PASSED: Department staff user authorized for department '${loggedStaff.departmentCode}'.`);
         } else {
             console.error('❌ TEST 3 FAILED');

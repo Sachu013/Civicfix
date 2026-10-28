@@ -1,8 +1,10 @@
+const mongoose = require('mongoose');
 const analyticsService = require('../services/analyticsService');
 const hotspotService = require('../services/hotspotService');
 const Complaint = require('../models/Complaint');
 const Department = require('../models/Department');
 const User = require('../models/User');
+const notificationService = require('../services/notificationService');
 const asyncHandler = require('../utils/asyncHandler');
 
 // @desc    Get Department Head Dashboard Overview Metrics (Scoped)
@@ -155,19 +157,42 @@ const getDepartmentEscalations = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Get Department Staff Officers List (Scoped)
+const { normalizeDepartmentCode } = require('../config/departmentConfig');
+
+// @desc    Get Department Staff/Verifier Officers List (Scoped)
 // @route   GET /api/department/staff
 const getDepartmentStaff = asyncHandler(async (req, res) => {
-    const departmentCode = req.departmentCode || req.query.departmentCode;
+    const rawDeptCode = req.departmentCode || req.query.departmentCode || req.user?.departmentCode;
 
-    if (!departmentCode) {
+    if (!rawDeptCode) {
         return res.status(400).json({ message: 'Department code is required' });
     }
 
-    const staffMembers = await User.find({
-        role: 'department_staff',
-        departmentCode: departmentCode.toUpperCase(),
-    }).select('_id name email departmentCode');
+    const departmentCode = normalizeDepartmentCode(rawDeptCode);
+
+    const rawStaffMembers = await User.find({
+        role: { $in: ['verifier', 'department_staff'] },
+        departmentCode,
+    }).select('_id name email role departmentCode').lean();
+
+    const staffMembers = rawStaffMembers.map(u => {
+        let cleanId = '';
+        if (u._id) {
+            if (typeof u._id === 'string') {
+                cleanId = u._id;
+            } else if (u._id.buffer && Array.isArray(u._id.buffer.data)) {
+                cleanId = Buffer.from(u._id.buffer.data).toString('hex');
+            } else if (u._id.data && Array.isArray(u._id.data)) {
+                cleanId = Buffer.from(u._id.data).toString('hex');
+            } else {
+                cleanId = u._id.toString();
+            }
+        }
+        return {
+            ...u,
+            _id: cleanId,
+        };
+    });
 
     res.json({
         departmentCode,
@@ -175,62 +200,162 @@ const getDepartmentStaff = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Assign Department Complaint to Department Staff Member (Scoped)
+const { sanitizeIdString, findComplaintByIdOrCode } = require('../utils/idHelper');
+
+// @desc    Assign or Reassign Department Complaint to Department Verifier (Department Head Only)
 // @route   POST /api/department/assign
 const assignComplaintToStaff = asyncHandler(async (req, res) => {
-    const { complaintId, staffId, note } = req.body;
-    const departmentCode = req.departmentCode || req.user.departmentCode;
+    const { complaintId, staffId, verifierId, note, reason, action } = req.body;
+    const targetVerifierId = verifierId || staffId;
 
-    if (!complaintId || !staffId) {
-        return res.status(400).json({ message: 'complaintId and staffId are required' });
+    const cleanComplaintId = sanitizeIdString(complaintId);
+    if (!cleanComplaintId) {
+        return res.status(400).json({ message: 'Valid complaintId is required' });
     }
 
-    const complaint = await Complaint.findById(complaintId);
+    // 1. RBAC: Only Department Head can assign or reassign verifiers
+    if (req.user && req.user.role === 'super_admin') {
+        return res.status(403).json({ message: 'Super Admin is monitor-only. Only Department Heads can assign or manage verifiers.' });
+    }
+
+    if (!req.user || req.user.role !== 'department_head') {
+        return res.status(403).json({ message: 'Forbidden: Only Department Head can assign or reassign verifiers' });
+    }
+
+    if (!req.user.departmentCode) {
+        return res.status(403).json({ message: 'Forbidden: Department Head has no assigned department' });
+    }
+
+    const headDeptCode = normalizeDepartmentCode(req.user.departmentCode);
+    const complaint = await findComplaintByIdOrCode(cleanComplaintId, Complaint);
+
     if (!complaint) {
         return res.status(404).json({ message: 'Complaint not found' });
     }
 
-    // Verify complaint belongs to authenticated user's department
-    if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
-        if (complaint.departmentCode !== departmentCode.toUpperCase()) {
-            return res.status(403).json({ message: 'Forbidden: Cannot assign complaint belonging to another department' });
-        }
+    // 2. Head Dept vs Complaint Dept Validation
+    const complaintDeptCode = normalizeDepartmentCode(complaint.departmentCode || complaint.assignedDepartment || complaint.category);
+    if (headDeptCode !== complaintDeptCode) {
+        return res.status(403).json({ message: `You can only assign complaints belonging to your department (${headDeptCode})` });
     }
 
-    // Verify target staff member belongs to the exact same department
-    const User = require('../models/User');
-    const staffUser = await User.findById(staffId);
-    if (!staffUser || staffUser.role !== 'department_staff') {
-        return res.status(400).json({ message: 'Invalid staff user specified' });
+    // Reject assignment for already resolved or closed complaints
+    if (complaint.status === 'Resolved' || complaint.status === 'Closed') {
+        return res.status(400).json({ message: `Cannot assign complaint that is already ${complaint.status}` });
     }
 
-    if (staffUser.departmentCode !== complaint.departmentCode) {
-        return res.status(403).json({ message: 'Forbidden: Cannot assign complaint to staff of a different department' });
+    // Handle Unassignment Action
+    if (action === 'unassign' || targetVerifierId === null || targetVerifierId === undefined || targetVerifierId === '' || targetVerifierId === 'unassign') {
+        const previousAssignee = complaint.assignedTo;
+        complaint.assignedTo = null;
+        complaint.assignedBy = req.user._id;
+        complaint.assignedAt = new Date();
+        complaint.assignmentSource = 'unassigned';
+
+        complaint.assignmentHistory.push({
+            verifier: null,
+            assignedBy: req.user._id,
+            assignedAt: new Date(),
+            action: 'unassigned',
+            previousDepartmentCode: complaint.departmentCode,
+            newDepartmentCode: complaint.departmentCode,
+            previousAssignee: previousAssignee || null,
+            newAssignee: null,
+            changedBy: req.user._id,
+            reason: reason || note || 'Unassigned by Department Head',
+            assignmentSource: 'department_head',
+            timestamp: new Date(),
+        });
+
+        await complaint.save();
+
+        await notificationService.notifyOnVerifierAssignment({
+            complaint,
+            verifierId: null,
+            previousVerifierId: previousAssignee,
+            action: 'unassign',
+            reason,
+            assignedBy: req.user._id,
+        }).catch((err) => console.error(err));
+
+        return res.json({
+            success: true,
+            message: `Complaint #${complaint.complaintId} unassigned`,
+            complaint,
+        });
+    }
+
+    // 3. Verifier Target Validation
+    const cleanVerifierId = sanitizeIdString(targetVerifierId);
+    let staffUser = null;
+
+    const isEmail = typeof targetVerifierId === 'string' && targetVerifierId.includes('@');
+    const isValidId = cleanVerifierId && mongoose.Types.ObjectId.isValid(cleanVerifierId);
+
+    if (!isValidId && !isEmail) {
+        return res.status(400).json({ message: 'Valid verifierId or staffId is required for assignment' });
+    }
+
+    if (isValidId) {
+        staffUser = await User.findById(cleanVerifierId);
+    }
+
+    if (!staffUser && isEmail) {
+        staffUser = await User.findOne({ email: String(targetVerifierId).trim() });
+    }
+
+    if (!staffUser) {
+        return res.status(404).json({ message: 'Verifier user not found' });
+    }
+
+    if (!['verifier', 'department_staff'].includes(staffUser.role)) {
+        return res.status(400).json({ message: `Invalid user role '${staffUser.role}'. Only users with role 'verifier' can be assigned` });
+    }
+
+    const verifierDeptCode = normalizeDepartmentCode(staffUser.departmentCode);
+    if (verifierDeptCode !== complaintDeptCode) {
+        return res.status(400).json({ message: `Staff member does not belong to your department` });
     }
 
     const previousAssignee = complaint.assignedTo;
+    const isReassignment = !!previousAssignee && previousAssignee.toString() !== staffUser._id.toString();
 
     complaint.assignedTo = staffUser._id;
     complaint.assignedAt = new Date();
     complaint.assignedBy = req.user._id;
-    complaint.assignmentSource = 'reassignment';
+    complaint.assignmentSource = 'department_head';
     complaint.status = 'Assigned';
 
     complaint.assignmentHistory.push({
+        verifier: staffUser._id,
+        assignedBy: req.user._id,
+        assignedAt: new Date(),
+        action: isReassignment ? 'reassigned' : 'assigned',
         previousDepartmentCode: complaint.departmentCode,
         newDepartmentCode: complaint.departmentCode,
-        previousAssignee,
+        previousAssignee: previousAssignee || null,
         newAssignee: staffUser._id,
         changedBy: req.user._id,
-        reason: note || 'Assigned to field staff officer by Department Head',
+        reason: reason || note || (isReassignment ? 'Reassigned to field verifier by Department Head' : 'Assigned to field verifier by Department Head'),
         assignmentSource: 'department_head',
         timestamp: new Date(),
     });
 
     await complaint.save();
+    await complaint.populate('assignedTo', 'name email role departmentCode');
+
+    await notificationService.notifyOnVerifierAssignment({
+        complaint,
+        verifierId: staffUser._id,
+        previousVerifierId: previousAssignee,
+        action: isReassignment ? 'reassign' : 'assign',
+        reason,
+        assignedBy: req.user._id,
+    }).catch((err) => console.error(err));
 
     res.json({
-        message: `Complaint #${complaint.complaintId} assigned to ${staffUser.name}`,
+        success: true,
+        message: `Complaint #${complaint.complaintId} assigned to verifier ${staffUser.name}`,
         complaint,
     });
 });
